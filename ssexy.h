@@ -17,33 +17,37 @@ class SSEXY
 private:
     int LegSpin[6][4];
 
+    //Physical parameters
     unsigned short Nx,Ny;                //Lattice dimensions
     unsigned int   NBonds;               //Number of bonds
-    unsigned int M;                      //Upper operator list size
-    unsigned int n;                      //Current operator list size
     unsigned int N;                      //Number of spin sites
-    unsigned int Nl;                     //Number of loops per MC step
     float T;                             //Temperature
     float Beta;                          //Inverse temperature
     vector <vector<unsigned int>> sites; //Sites connected by bonds  
-    vector <int> sm;                     //Operator vector list
     vector <int> spins;                  //Spins array
     vector <int> ap;                     //Propagated spins state
-    vector<unsigned int> first;    //First and last leg coordinates
-    vector<unsigned int> last;    //for a particular spin site
 
     //Algorithmic variables
-    unsigned int ESteps;         //Number of equilibration steps    
+    unsigned int ESteps;                 //Number of equilibration steps    
+    unsigned int Nloops;                 //Number of loops per MC move
+    unsigned int M;                      //Upper operator list size
+    unsigned int n;                      //Current operator list size
+    vector <int> VisitLegs;              //
+    vector <int> sm;                     //Operator vector list
+    vector<int> first;          //First and last leg coordinates
+    vector<int> last;           //for a particular spin site
+    vector <unsigned int> NvisitedLegs;  //Number of visited legs per MC step
     
-    //Random objects
+    //Random generation objects
     t_eng   eng;                 //Mersenne twister
     t_uReal uReal;               //Uniform real distribution
     t_uInt  uInt;                //Uniform distribution 
     boost::variate_generator<t_eng&, t_uInt > uRandInt; //Generator of integers
     boost::variate_generator<t_eng&, t_uReal> uRand;    //Generator of real number
     
-    void  LatticeGeometry();
+    //Methods
     float BondDiagonalEnergy(unsigned int b);
+    void  LatticeGeometry();
     unsigned int  VertexType(unsigned int b, int oper);
 
 public:
