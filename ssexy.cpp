@@ -1,24 +1,26 @@
 #include <iostream>
 #include "ssexy.h"
+//#include "communicator.h"
+//#include "communicator.cpp"
 #include "stdlib.h"
 #include <math.h>
 #include <string.h>
 #include <iomanip>
 using namespace std;
     
-int sgn(int val) {
+long sgn(long val) {
     return ((0<=val) - (val<0));
 }
 
 /**************************************************************
 *  Constructor 
 **************************************************************/
-SSEXY::SSEXY(unsigned short _Nx, unsigned short _Ny, float _T, unsigned int seed):
+SSEXY::SSEXY(unsigned short _Nx, unsigned short _Ny, float _T, long seed):
 //Initialize random objects with default values
-eng(1),uReal(0,1),uInt(0,65535),uRandInt(eng,uInt),uRand(eng,uReal) 
+eng(1),uReal(0,1),uInt(0,65535231),uRandInt(eng,uInt),uRand(eng,uReal), communicator(_Nx,_Ny,_T)
 
 {
-    int tmp[6][4] = {   {-1,-1,-1,-1},
+    long tmp[6][4] = {  {-1,-1,-1,-1},
                         { 1, 1, 1, 1},
                         { 1,-1,-1, 1},
                         {-1, 1, 1,-1},
@@ -27,7 +29,7 @@ eng(1),uReal(0,1),uInt(0,65535),uRandInt(eng,uInt),uRand(eng,uReal)
                     };
     memcpy(LegSpin,tmp,sizeof tmp);
    
-     //Initialize ranndomness with the seed
+    //Initialize ranndomness with the seed
     uRand.engine().seed(seed);
     uRand.distribution().reset();
     uRandInt.engine().seed(seed);
@@ -38,19 +40,20 @@ eng(1),uReal(0,1),uInt(0,65535),uRandInt(eng,uInt),uRand(eng,uReal)
     Ny     = _Ny;
     N      = Nx*Ny;
     T    = _T;
-    Beta = 1/T;
+    Beta = 1.0/T;
+    cout << "Beta = " << Beta << endl;
 
     //Initialize bonds
     if (Ny>1) NBonds = 2*N;
     else      NBonds = N; 
-    sites.resize(NBonds+1,vector<unsigned int>(2,0));
+    sites.resize(NBonds+1,vector<long>(2,0));
     LatticeGeometry();
     
 
    //Initialize spins
     spins.resize(N,0);
-    for (vector<int>::iterator spin=spins.begin(); spin!=spins.end(); spin++) {
-        *spin = pow(-1,1+uRandInt()%2);
+    for (vector<long>::iterator spin=spins.begin(); spin!=spins.end(); spin++) {
+        *spin = pow(-1,uRandInt()%2);
         //cout << *spin << " ";
     }
 
@@ -58,14 +61,23 @@ eng(1),uReal(0,1),uInt(0,65535),uRandInt(eng,uInt),uRand(eng,uReal)
     last.resize(N,-1);
 
     //Initialize operator list
-    M = round(Beta*NBonds*1.5);
+    M = round(((float) NBonds) *Beta*1.5);
     n = 0;
     sm.resize(M,0);  
 
     //Initialize algorithmic variables
     ESteps = 100;              
-    Nloops = 5;
+    Nloops = 1;
     NvisitedLegs.resize(Nloops,0);
+    estep = 1;
+
+    //Initialize communicator class
+    string eHeader = boost::str(boost::format("#%15s%16s%16s%16s%16s%16s%16s%16s%16s") %"n"%"dn"%"E"%"dE"%"Legs"%"dLegs"%"Magn"%"dMagn"%"M");
+    *communicator.stream("estimator") << eHeader <<endl;    
+    
+    for (auto bond = ++sites.begin(); bond != sites.end(); bond++)
+        *communicator.stream("bond") << boost::str(boost::format("%6d%6d") %bond->at(0) %bond->at(1) ) ;
+    *communicator.stream("bond") << endl;
 }
 
 
@@ -75,52 +87,57 @@ eng(1),uReal(0,1),uInt(0,65535),uRandInt(eng,uInt),uRand(eng,uReal)
 **************************************************************/
 void SSEXY::Equilibrate(){
 
-    int i;
-    for (int step=0; step<ESteps; step++){
-        cout << endl << "====== Step " << step <<" =========" <<endl;   
-
-//        cout << "\n\n------Diagonal---------- \n\n";   
-//        cout << "\n--Result: \n";   
+    long i;
+    long  totalvLegs = 0;
+    long Cumn = 0;
+    long CumM = 0;
+    long totalMagn = 0;
+    long CumMagn  = 0;
+    long CumvLegs = 0;
+    float E = 0;
+    for (long step=0; step<ESteps; step++){
+        //Spins output
+        for (vector<long>::iterator spin=spins.begin(); spin!=spins.end(); spin++) 
+            *communicator.stream("spin") << boost::str(boost::format("%6d") %*spin) ;
+        *communicator.stream("spin") << endl;
+       
+        //Diagonal move 
         if (DiagonalMove(1.5) == 1){
-           cout << "Resizing \n"; 
-           M = int(1.2*M);
+           M = long(1.2*M);
            sm.resize(M,0); 
         }
-        cout << "Operator list. n = " << n << " M = " << M << endl;   
+        Cumn += n;
+        CumM += M;
 
-//        for (vector<int>::iterator oper=sm.begin(); oper!=sm.end(); oper++) {
-//             cout << *oper << " ";
-//         }
-//         cout << endl;     
-//         cout << "Spins: \n";
-//         i=0;
-//         for (vector<int>::iterator spin=spins.begin(); spin!=spins.end(); spin++) {
-//             cout << setw(2) << *spin << " ";
-//             i += 1;
-//             if (i%Nx == 0) cout << "\n";
-//         }
-//         cout << endl;     
+        //Off-diagonal move
+        OffDiagonalMove();
+        totalvLegs = 0;
+        for (vector<long>::iterator NvLeg = NvisitedLegs.begin(); NvLeg != NvisitedLegs.end(); NvLeg++)
+            totalvLegs += *NvLeg;
+        CumvLegs += totalvLegs;
+        
+        
+        //Compute Magnetization   
+        totalMagn = 0;
+        for (vector<long>::iterator cspin = spins.begin(); cspin != spins.end(); cspin++)
+            totalMagn += *cspin;
+        CumMagn += totalMagn;
 
-//         cout << "------Off-diagonal-------- \n\n";   
-         OffDiagonalMove();
-         unsigned int totalvLegs = 0;
-         for (vector<unsigned int>::iterator NvLeg = NvisitedLegs.begin(); NvLeg != NvisitedLegs.end(); NvLeg++)
-             totalvLegs += *NvLeg;
-         cout << Nloops << " loops; " << totalvLegs << " legs \n";   
-//         cout << "\n--Result: \n";   
-//         cout << "Operator list: \n";   
-//         for (vector<int>::iterator oper=sm.begin(); oper!=sm.end(); oper++) {
-//             cout << *oper << " ";
-//         }
-//         cout << endl;     
-//         cout << "Spins: \n";
-//         i=0;
-//         for (vector<int>::iterator spin=spins.begin(); spin!=spins.end(); spin++) {
-//             cout << setw(2) << *spin << " ";
-//             i += 1;
-//             if (i%Nx == 0) cout << "\n";
-//         }
-   }
+
+        //Estimators output         
+        if (step%estep == 0){
+           E = -((float) Cumn/((float) estep*N))/Beta + (float) 1;
+           *communicator.stream("estimator") << boost::str(boost::format("%16.8E%16.8E%16.8E%16.8E%16.8E%16.8E%16.8E%16.8E%16.8E") %(Cumn/(1.0*estep)) %0.0 %E %0.0 %(CumvLegs/(1.0*estep)) %0.0 %(CumMagn/(1.0*estep)) %0.0 %(CumM/(1.0*estep))) << endl;
+           //cout << "n = " << setw(7) << (float) Cumn/((float) estep) << " E = " << setw(7) << E << " M = " << setw(9) << (float) CumM/estep << " Legs = " << setw(6) << (float) CumvLegs/estep << " Magnetization " << setw(6) << (float) CumMagn/estep << endl;
+           Cumn = CumM = CumvLegs = CumMagn = 0;
+           }      
+
+        //Operator output 
+        for (vector<long>::iterator oper=sm.begin(); oper!=sm.end(); oper++) 
+            *communicator.stream("operator") << boost::str(boost::format("%6d") %*oper) ;
+        *communicator.stream("operator") << endl;
+         
+     }
 }
 
 /***************************************************************
@@ -128,18 +145,21 @@ void SSEXY::Equilibrate(){
 ***************************************************************/
 void SSEXY::LatticeGeometry()
 /*
-Define 2 arrays that remember where a b'th pair bond starts from (site1)
-and where it goes to (site 2) for a  2-d periodic square lattice.
+Define a 2-d array to store the start (0th row) and the end (1st row) 
+of the b'th pair bond  for a  2-d periodic square lattice.
 Below, the left bottom site initiates 2 bonds:
 .
 |
 . __ .
+
 */
 {
-    unsigned int b=1;                             //Bond index
-    if (Ny >1){
-         for (int y=0; y<Ny; y++){
-             for (int x=0; x<Nx; x++){
+    long b=1;                             //Bond index
+                                                   //Required to start from a value > 0 
+    if (Ny >1){                                    //A 2-d lattice
+         for (long y=0; y<Ny; y++){
+             for (long x=0; x<Nx; x++){
+                 //Define 2 bonds per site
                  sites[b+0][0] = y*Nx+x;
                  sites[b+0][1] = y*Nx+(x+1)%Nx;
                  sites[b+1][0] = y*Nx+x;
@@ -150,59 +170,58 @@ Below, the left bottom site initiates 2 bonds:
              b += 2;
          } 
     }
-    else
-         for (int x=0; x<Nx; x++){
+    else                                           //A 1-d chain
+         for (long x=0; x<Nx; x++){
+             //Define 1 bond per site
              b = x+1;
              sites[b][0] = x;
              sites[b][1] = (x+1)%Nx;
              }
 }
 
-float SSEXY::BondDiagonalEnergy(unsigned int b){
-      return 0.5;
+float SSEXY::BondDiagonalEnergy(long b){
+      return (float) 0.5;
 }
 
 /**************************************************************
 * Diogonal Monte Carlo move
 **************************************************************/
-int SSEXY::DiagonalMove(float ratio)
+long SSEXY::DiagonalMove(float ratio)
 {
-     unsigned int b=0;     //Bond index
+     long b=0;    //Bond index
      float AccP = 0;       //Acceptance probability
      float uRan;
      ap = spins;
-     for (vector<int>::iterator oper=sm.begin(); oper!=sm.end(); oper++) {
-        //Identity operator
+     for (vector<long>::iterator oper=sm.begin(); oper!=sm.end(); oper++) {
+     //Identity operator
          if (*oper==0){
-            b = uRandInt()%NBonds+1;                                //Bond to be created 
-            AccP = NBonds*Beta*BondDiagonalEnergy(b) / (M-n);     //Acceptance probability
+            b = uRandInt()%NBonds+1;                                                   //Bond to be created 
+            AccP = ((float) NBonds)*Beta*BondDiagonalEnergy(b) / ((float) (M-n));     //Acceptance probability
             uRan =  uRand();
             if (uRan<AccP){
                 //cout << "I -> D. Operator = " << *oper << endl;
                *oper = 2*b;
-               //Update the current operator list length
-               n += 1;                                          
-               //If it is too close to the max (M), halt the move 
-               if (M/n<ratio){
-                  return 1;   
+               n += 1;               //Update the current operator list length                                         
+               if (((float) M/n)<ratio){       //If it is too close to the max (M), halt the move 
+                   cout << "M/n = " << (float) M/n << " < " << ratio << endl;
+                   return 1;   
                }
             }   
          }
-         //Diagonal operator
+     //Diagonal operator
          else if (*oper%2==0){
-            b = (unsigned int)(*oper/2);                          //Bond to be removed
-            AccP = (M-n+1) / (NBonds*Beta*BondDiagonalEnergy(b)); //Acceptance probability
+            b = (long)(*oper/2);                                   //Bond to be removed
+            AccP = ((float) M-n+1)/(((float) NBonds)*Beta*BondDiagonalEnergy(b));  //Acceptance probability
             if (uRand()<AccP){
                //cout << "D -> I. Operator = " << *oper  <<endl;
                *oper = 0;
                n -= 1;  
             }
          }
-         //Off-diagonal operator
+     //Off-diagonal operator
          else{
-            b = (unsigned int)((*oper-1)/2);                      //Bond being acted on
-            //Flip the corresponding spins
-            ap[sites[b][0]] = -ap[sites[b][0]]; 
+            b = (long)((*oper-1)/2);                      //Bond being acted on
+            ap[sites[b][0]] = -ap[sites[b][0]];           //Flip spins connected by the b'th bond
             ap[sites[b][1]] = -ap[sites[b][1]]; 
          }
     }
@@ -216,10 +235,10 @@ return 0;
 * Determine type of a vertex for a particular operator acting 
 * on a given bond based on its type and current propagated state. 
 **************************************************************/
-unsigned int SSEXY::VertexType(unsigned int b, int oper)
+long SSEXY::VertexType(long b, long oper)
 {
-    int s0 = ap[sites[b][0]];  
-    int s1 = ap[sites[b][1]];
+    long s0 = ap[sites[b][0]];  
+    long s1 = ap[sites[b][1]];
     if  (oper%2 == 0){
         if  ((s0 ==-1) and (s1 ==-1))
             return 1;
@@ -245,51 +264,43 @@ unsigned int SSEXY::VertexType(unsigned int b, int oper)
 **************************************************************/
 void SSEXY::OffDiagonalMove()
 {
-    int p=-1;                                       //Index of the current operator            
-    unsigned int b=0;                               //Bond index
-    vector<int> links(4*n,-1);             //Linked vertex list
-    vector<int> vtx(n,-1);                  //Vertex type
-    //Reinitiate the propagated spins state
-    ap = spins;
-    fill(first.begin(),first.end(),-1);
+    long p=-1;                              //Index of the current operator            
+    long b=0;                               //Bond index
+    vector<long> links(4*n,-1);             //Linked vertex list
+    vector<long> vtx(n,-1);                 //Vertex type
+   
+    ap = spins;                             //Reinitiate the propagated spins state                 
+    fill(first.begin(),first.end(),-1);     //Reinitiate helper arrays storing the first and last leg for each spin
     fill(last.begin(),last.end(),-1);
+
+
     //Construct linked vertex list (link vector structure)
     //Coordiantes of a leg on a particular operator can be encoded 
     //by one number: 4*operator_index+leg_index (1 of 4). By construction, 
     //the value of the links element for a particular index (link[index]), 
     //encodes the leg coordinates to which the leg encoded by the 
     //index-value is linked.  
-    for (vector<int>::iterator oper=sm.begin(); oper!=sm.end(); oper++) {
-        //Ignore unit operator
-        if (*oper != 0){
-            //Determine operator's bond based on operator's value
-            b = (unsigned int)((*oper-(*oper)%2)/2);
-            //Increase the operator counter
-            p++;
-            //For each of 2 site bonds 
-            for (int a=0; a<2; a++){
-                //If it is not for the first time that an operator
-                //acts on this site. We can construct a links.
-                if (last[sites[b][a]] != -1){
+    for (vector<long>::iterator oper=sm.begin(); oper!=sm.end(); oper++) {
+        if (*oper != 0){                        //Ignore unit operator
+            b = (long)((*oper-(*oper)%2)/2);    //Determine operator's bond based on operator's value
+            p++;                                //Increase the operator counter
+            for (long a=0; a<2; a++){           //Go through both sites connected by the bond 
+                if (last[sites[b][a]] != -1){   //Check whether the site has been already acted upon
                     //cout << sites[b][a] <<endl; 
-                    links[4*p+a]    = last[sites[b][a]];
+                    links[4*p+a]    = last[sites[b][a]];    //Construct a link between 2 legs
                     links[last[sites[b][a]]] = 4*p+a;
                 }
-                //Otherwise, just record this first occurence
                 else{
-                    first[sites[b][a]] = 4*p+a;
+                    first[sites[b][a]] = 4*p+a;             //Record this first occurence
                 }
-                //Update what is the last leg acting on this site
-                if (a==0) last[sites[b][a]]  = 4*p+3;
+                if (a==0) last[sites[b][a]]  = 4*p+3;       //Update what is the last leg acting on this site
                 else      last[sites[b][a]]  = 4*p+2;
             }
            
-            //Record what type of vertex is it
-            vtx[p] = VertexType(b,*oper);
-
-            //Update the propagated spins state if it is an off-diagonal operator
-            if  (*oper%2 == 1){
-                ap[sites[b][0]] = -ap[sites[b][0]]; 
+            vtx[p] = VertexType(b,*oper);                   //Record what type of vertex is it
+            
+            if  (*oper%2 == 1){                             //If it is an off-diagonal operator
+                ap[sites[b][0]] = -ap[sites[b][0]];         //Update the propagated spins state
                 ap[sites[b][1]] = -ap[sites[b][1]]; 
             }
             
@@ -297,62 +308,77 @@ void SSEXY::OffDiagonalMove()
 
     }
     
-    //Construct links across the boundary in the p-expansion
-    for (int lspin=0; lspin<last.size(); lspin++){
+    //Construct links across the periodic boundary in the p-expansion
+    for (long lspin=0; lspin<last.size(); lspin++){
         if (last[lspin] != -1){
             links[last[lspin]]  = first[lspin];
             links[first[lspin]] = last[lspin];
         }
     }
 
+    //Vertex output 
+    for (auto vertex=vtx.begin(); vertex!=vtx.end(); vertex++) 
+        *communicator.stream("vertex") << boost::str(boost::format("%4d") %*vertex) ;
+    *communicator.stream("vertex") << endl;
+    
+    //Link output 
+    for (auto link=links.begin(); link!=links.end(); link++) 
+        *communicator.stream("link") << boost::str(boost::format("%8d") %*link) ;
+    *communicator.stream("link") << endl;
+
     /*cout << "Links \n";
-    for (int i=0; i != links.size(); i++){
+    for (long i=0; i != links.size(); i++){
         cout << setw(4)<<links[i]; 
         if ((i+1)%4==0) cout << endl;
      }
     */
 //    cout << "First \n";
-//    for (int i=0; i != first.size(); i++){
+//    for (long i=0; i != first.size(); i++){
 //        cout << setw(3)<<i <<" : "<< first[i]<<endl; 
 //     }
 //    cout << endl;
     
 //    cout << "Vertices \n";
-//    for (int i=0; i != vtx.size(); i++){
+//    for (long i=0; i != vtx.size(); i++){
 //        cout << setw(2)<<vtx[i]; 
 //     }
 //     cout << endl;
     
 //------------------------------------------------------------------------------------------------
-    unsigned int j0;            //Loop entrance leg
-    unsigned int j;             //Current leg
-    pair<int,int> legtype;      //Struct with the leg, and operator type   
+    long j0;                      //Loop entrance leg
+    long j;                       //Current leg
+    pair<long,long> legtype;      //Struct with the leg, and operator type   
  
     //Construct Nl number of loops 
     if (n>0){
-        for (int i=0; i!=Nloops; i++) {
+        for (long i=0; i!=Nloops; i++) {
             j0 = uRandInt()%(4*n);       //Pick a random loop entrance leg among all possible legs
             j  = j0;
-            NvisitedLegs[i] = 0;         //Number of visited legs
+            *communicator.stream("loop") << boost::str(boost::format("%8d") %j) ;
+            NvisitedLegs[i] = 0;         //Number of visited legs for i'th loop
             //Construct an operator-loop
             do  {
-                    NvisitedLegs[i] += 1;
-                    p = (int) j/4;                      //Current operator index
+                    p = (long) j/4;                     //Current operator index
                     legtype = SwitchLeg(j%4,vtx[p]);    //Get the next leg and the new operator's type
                     j       = legtype.first +4*p;       //Move to the next leg
                     vtx[p]  = legtype.second;           //Update the type of the operator
+                    NvisitedLegs[i] += 1;
+                    *communicator.stream("loop") << boost::str(boost::format("%8d") %j) ;
                     
-                    if  (j == j0) break;                //If the loop is closed, we are done
+                    if   (j == j0) break;               //If the loop is closed, we are done
                     else{ 
+                        j = links[j];                   //Else move to the next linked leg
                         NvisitedLegs[i] += 1;
-                        j = links[j];                  //Else move to the next linked leg
+                        *communicator.stream("loop") << boost::str(boost::format("%8d") %j) ;
                         }
             } while  (j !=j0);                          //Another way to close the loop
+            *communicator.stream("loop") << endl;
         }
      }
+     else *communicator.stream("loop") << endl ;
 //     cout << "Constructed "<< Nloops<< " loops " << endl;
 
-//    for (int i=0; i != NvisitedLegs.size(); i++){
+//    for (long i=0; i != NvisitedLegs.size(); i++){
 //        cout << i << "'th loop: " << NvisitedLegs[i] << " legs" << endl;
 //     }
     
@@ -360,41 +386,33 @@ void SSEXY::OffDiagonalMove()
     //Map back the changes to the operator list
 //    cout << "Mapping back to the operator list" << endl;
     p = -1;
-    int leg;
-    for (vector<int>::iterator oper=sm.begin(); oper!=sm.end(); oper++) 
+    long leg;
+    for (vector<long>::iterator oper=sm.begin(); oper!=sm.end(); oper++) 
         if (*oper != 0){
-            b = (unsigned int)((*oper-(*oper)%2)/2);     //Determine operator's bond
+            b = (long)((*oper-(*oper)%2)/2);             //Determine operator's bond
             p++;                                         //Increase the operator counter
             
-            /*if (vtx[p]>4){ 
-                cout <<"OFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF\n"<<"Before "<< *oper<< endl;
-                cout << vtx[p] << endl;
-                cout << (unsigned int)((sgn(vtx[p]-5)+1)/2)<<endl;
-            }*/
-            *oper = 2*b + (unsigned int)((sgn(vtx[p]-5)+1)/2);           //The new operator bond is unchanged
+           *oper = 2*b + (long)((sgn(vtx[p]-5)+1)/2);    //The new operator bond is unchanged
         
-            /*if (vtx[p]>4){ 
-                cout <<"After " << *oper << "\nOFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF\n"<<endl;
-            }*/
         }                                                //but its type could have changed
 //    cout << "Mapping back to the spins state" << endl;
         
     //Map back the changes to the spins state
-    for (int i=0; i!=N; i++)
+    for (long i=0; i!=N; i++)
         if  (first[i]==-1){                              //If the spin is not acted by an operator 
             if (uRand()<0.5)
                 spins[i] = -spins[i];
 //                cout << "Randomly fliiped : "<< i <<endl;
        }                                                //Flip it with probability 1/2
         else{                                            //Otherwise:               
-            p   = (int) first[i]/4;                      //Get the first operator that acts on it   
+            p   = (long) first[i]/4;                      //Get the first operator that acts on it   
             leg = first[i]%4;                            //And the leg that the spin is      
             spins[i] = LegSpin[vtx[p]-1][leg];           //Use the pregenerated leg/operator -> spins
                                                          //map to establish what is the new spin  
             
             //cout << "---------------------------" << endl;
-            /*for (int k = 0; k !=6; k++){
-                for (int t =0; t != 4; t++)
+            /*for (long k = 0; k !=6; k++){
+                for (long t =0; t != 4; t++)
                     cout << setw(3) << LegSpin[k][t];
                 cout << endl;
             }*/
@@ -409,7 +427,7 @@ void SSEXY::OffDiagonalMove()
 
 
 //#################################################################
-// There are 4 different types of moves for pair-interacting bonds.
+// There are 4 different types of moves for pair-longeracting bonds.
 // Below they are implemented as seperate functions. For a given
 // enLeg, each function returns the exit leg after the move is done.
 // Leg labelling convention : bottom left leg is 0,  the label # is 
@@ -417,19 +435,19 @@ void SSEXY::OffDiagonalMove()
 //#################################################################
 
 
-int Bounce(unsigned int enLeg){
+long Bounce(long enLeg){
     return 0;
 }
 
-int ContinueStraight(unsigned int enLeg){
+long ContinueStraight(long enLeg){
     return enLeg - sgn(enLeg-2)*(1-(sgn((enLeg%3)-1)-1));
 }
 
-unsigned int SwitchReverse(unsigned int enLeg){
+long SwitchReverse(long enLeg){
     return enLeg - sgn(enLeg%2-1);
 }
 
-unsigned int SwitchContinue(unsigned int enLeg){
+long SwitchContinue(long enLeg){
     return enLeg - 2*sgn(enLeg - 2);
 }
 //#################################################################
@@ -438,14 +456,10 @@ unsigned int SwitchContinue(unsigned int enLeg){
 
 
 
-int LegSpin(unsigned int leg, unsigned int vtype){
-    
-}
 
-
-pair<int,int> SSEXY::SwitchLeg(unsigned int enLeg, unsigned int vtype){
-    int exLeg   = -1;
-    int newtype = -1;
+pair<long,long> SSEXY::SwitchLeg(long enLeg, long vtype){
+    long exLeg   = -1;
+    long newtype = -1;
     switch (vtype){
         case 1:
                     if  (uRand()<0.5){
@@ -522,7 +536,7 @@ pair<int,int> SSEXY::SwitchLeg(unsigned int enLeg, unsigned int vtype){
                     break;
  
     }
-return pair <int,int> (exLeg,newtype);
+return pair <long,long> (exLeg,newtype);
 }
 
 
@@ -530,7 +544,7 @@ return pair <int,int> (exLeg,newtype);
 # Future Code
 ##############################################
 
-unsigned int DeterministicSwitchLeg(unsigned int j, unsigned int vtype){
+long DeterministicSwitchLeg(long j, long vtype){
     switch (vtype){
         case 1:
             nettype = 6 - (enLeg%2);
@@ -558,7 +572,7 @@ unsigned int DeterministicSwitchLeg(unsigned int j, unsigned int vtype){
 
 int main()
 {
-    SSEXY ssexy(4,4,0.5,2);
+    SSEXY ssexy(10,1,1.0,4);
     ssexy.Equilibrate();
     return 0;
 }
