@@ -101,6 +101,12 @@ void SSEXY::Equilibrate(){
             *communicator.stream("spin") << boost::str(boost::format("%6d") %*spin) ;
         *communicator.stream("spin") << endl;
        
+        //Operator output 
+        for (vector<long>::iterator oper=sm.begin(); oper!=sm.end(); oper++) 
+            if (not(*oper == 0))
+               *communicator.stream("operator") << boost::str(boost::format("%6d") %*oper) ;
+        *communicator.stream("operator") << endl;
+        
         //Diagonal move 
         if (DiagonalMove(1.5) == 1){
            M = long(1.2*M);
@@ -109,6 +115,12 @@ void SSEXY::Equilibrate(){
         Cumn += n;
         CumM += M;
 
+        //Operator output 
+        for (vector<long>::iterator oper=sm.begin(); oper!=sm.end(); oper++) 
+            //if (not(*oper == 0))
+                *communicator.stream("operator") << boost::str(boost::format("%6d") %*oper) ;
+        *communicator.stream("operator") << endl;
+         
         //Off-diagonal move
         OffDiagonalMove();
         totalvLegs = 0;
@@ -132,10 +144,6 @@ void SSEXY::Equilibrate(){
            Cumn = CumM = CumvLegs = CumMagn = 0;
            }      
 
-        //Operator output 
-        for (vector<long>::iterator oper=sm.begin(); oper!=sm.end(); oper++) 
-            *communicator.stream("operator") << boost::str(boost::format("%6d") %*oper) ;
-        *communicator.stream("operator") << endl;
          
      }
 }
@@ -220,9 +228,9 @@ long SSEXY::DiagonalMove(float ratio)
          }
      //Off-diagonal operator
          else{
-            b = (long)((*oper-1)/2);                      //Bond being acted on
-            ap[sites[b][0]] = -ap[sites[b][0]];           //Flip spins connected by the b'th bond
-            ap[sites[b][1]] = -ap[sites[b][1]]; 
+//            b = (long)((*oper-1)/2);                      //Bond being acted on
+//            ap[sites[b][0]] = -ap[sites[b][0]];           //Flip spins connected by the b'th bond
+//            ap[sites[b][1]] = -ap[sites[b][1]]; 
          }
     }
     
@@ -315,6 +323,11 @@ void SSEXY::OffDiagonalMove()
             links[first[lspin]] = last[lspin];
         }
     }
+    //Operator output 
+    for (vector<long>::iterator oper=sm.begin(); oper!=sm.end(); oper++) 
+        if (not(*oper==0))
+            *communicator.stream("operator") << boost::str(boost::format("%6d") %*oper) ;
+    *communicator.stream("operator") << endl;
 
     //Vertex output 
     for (auto vertex=vtx.begin(); vertex!=vtx.end(); vertex++) 
@@ -421,8 +434,26 @@ void SSEXY::OffDiagonalMove()
             //cout << "Leg      " << leg      << endl;
             //cout << "Spin     " << spins[i] << endl;
             }
-    
-  return; 
+//   ap = spins;     
+//   p = 0; 
+//   fill(vtx.begin(),vtx.end(),-1);
+//   cout << "n = " << n << endl;
+//   for (vector<long>::iterator oper=sm.begin(); oper!=sm.end(); oper++){ 
+//        if (*oper != 0)
+//            vtx[p] = VertexType(b,*oper);                 
+//            cout <<  "p = " << vtx[p] <<endl;
+//            if  (*oper%2 == 1){                             //If it is an off-diagonal operator
+//                ap[sites[b][0]] = -ap[sites[b][0]];         //Update the propagated spins state
+//                ap[sites[b][1]] = -ap[sites[b][1]]; 
+//            p += 1; 
+//            }
+//   }
+     
+    //Vertex output 
+   for (auto vertex=vtx.begin(); vertex!=vtx.end(); vertex++) 
+        *communicator.stream("vertex") << boost::str(boost::format("%4d") %*vertex) ;
+    *communicator.stream("vertex") << endl;
+   return; 
 }
 
 
