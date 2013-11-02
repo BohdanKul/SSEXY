@@ -27,7 +27,7 @@ vtypes = np.array([ [w,w,w,w],
 
 offRcolor = 'black'
 dRcolor   = 'none'
-linkKwarg = {'color': 'black','linestyle':'--','linewidth':4}
+linkKwarg = {'color': 'black','linestyle':'--','linewidth':2}
 loopKwarg = {'color': 'red'  ,'linestyle':'-'}
 
 # Vertex constants
@@ -38,21 +38,19 @@ cradius = rwidth/5.0
 offset  = rwidth*0.5
 
 # Algorithmic constants
-Nspins     = 5
-Noperators = 6
+Nspins     = 10
+Noperators = 10
 
 #Figure constants
 xSpacing = rwidth/2.0*0
 xL = 0
+xW = 0
 cellWidth = rwidth + xSpacing
-xW = Nspins*cellWidth
-xH = xL + xW
 
 ySpacing = rwidth*1.25
 yL = 0
+yW = 0
 cellHeight = 2*(2*cradius+offset)+rheight+ySpacing
-yW = Noperators*cellHeight
-yH = yL + yW
 
 #cellHeight = yW/float(Noperators - 1.0)
 #cellWidth  = xW/float(Nspins - 1.0)
@@ -91,8 +89,8 @@ def DrawPeriodicLink(ax,From,To,kwargs):
     (legT,operT,spinT) = To
 #    if not(((legF == 0) and (legT = 3)) or ((legF == 1) and (legT == 2))):
 #       print "Wrongly connected periodic legs: from=%i to=%i" %(legF,legT)
-    if (legF == 0) or (legF == 3): shift = -rwidth/2.5
-    else:                          shift =  rwidth/2.5
+    if (min(legF,legT) == 0) or (min(legF,legT) == 3): shift = -rwidth/3.0
+    else:                          shift =  rwidth/3.0
     xyFrom = GetLegsXYCoords(From) + (xL,yL)
     xyTo   = GetLegsXYCoords(To)   + (xL,yL)
     line = plt.Line2D((xyFrom[0],xyFrom[0]+shift),(xyFrom[1],xyFrom[1]),**kwargs)
@@ -111,21 +109,23 @@ def DrawSpin(ax,spin,state):
     xy = cgrid[0]
     if state == 1: fcol = 'black'
     else         : fcol = 'white'
+    #circle = plt.Circle(xy, cradius,ec="black", facecolor=fcol)
     circle = mpatches.Circle(xy, cradius,ec="black", facecolor=fcol)
     ax.add_patch(circle)
 
     
 
-def DrawVertex(ax,rcenter,vtype):
-    #rcenter += (cellWidth/2.0,cellHeight/2.0)
-    cgrid   = np.mgrid[rcenter[0]-rwidth/2.0:rcenter[0]+rwidth/2.0:2j, 
-                       rcenter[1]+rheight+offset:rcenter[1]-rheight-offset:2j].reshape(2,-1).T
-    # add legs
-    cgrid = TransformGrid(cgrid)
-    for (i,xy) in enumerate(cgrid):
-        circle = mpatches.Circle(xy, cradius,ec="black",
-                                facecolor=vtypes[vtype][i])
-        ax.add_patch(circle)
+def DrawVertex(ax,rcenter,vtype,veroper):
+    if veroper:
+        #rcenter += (cellWidth/2.0,cellHeight/2.0)
+        cgrid   = np.mgrid[rcenter[0]-rwidth/2.0:rcenter[0]+rwidth/2.0:2j, 
+                           rcenter[1]+rheight+offset:rcenter[1]-rheight-offset:2j].reshape(2,-1).T
+        # add legs
+        cgrid = TransformGrid(cgrid)
+        for (i,xy) in enumerate(cgrid):
+            circle = mpatches.Circle(xy, cradius,ec="black",
+                                    facecolor=vtypes[vtype][i])
+            ax.add_patch(circle)
 
     # add operator
     if vtype < 4 : rcolor = dRcolor
@@ -149,6 +149,83 @@ def GetSpin(leg,bspins):
     if (leg == 0) or (leg == 3): return bspins[0]
     else:                        return bspins[1]
     
+def DrawSpins(ax,spins):
+    # Display current spins state
+    for (i,spin) in enumerate(spins):
+        DrawSpin(ax,i,spin)
+
+def DrawOperators(ax,opers,bonds,vertices,veroper):
+    # Operator's coordiantes
+    (p,s) = (0,0)
+    # Display current operator state
+    for oper in opers:
+        if oper == 0: continue 
+        s = bonds[0][oper//2]
+        xy = GetOperXYCoords((0,p,s))
+        if veroper:
+            vtx = vertices[p]
+            DrawVertex(ax,xy,vtx-1,veroper)
+        else:
+            if oper%2 == 1: vtx = 5
+            else:            vtx = 2
+            DrawVertex(ax,xy,vtx,veroper)
+        #print '---------------\n', '(s,p) = ', (s,p), '\n(x,y) =', xy
+        p += 1
+
+def DrawLinks(ax,links,bonds,opers,LinksTypes):
+    for i,link in enumerate(links):
+        # Skip if the relevant link has been already visit
+        if link == -1: continue
+
+        # Get the coordiantes of the link's origin
+        (pFrom,legFrom)  = (i//4,i%4)
+        sFrom   = GetSpin(legFrom,bonds[:,opers[pFrom]//2])
+
+        # Get the coordiantes of the link's end 
+        (pTo,legTo)   = (link//4,link%4)
+        sTo   = GetSpin(legTo,bonds[:,opers[pTo]//2])
+
+        # Draw link
+        if LinksTypes[i]:   DrawPeriodicLink(ax,(legFrom,pFrom,sFrom),(legTo,pTo,sTo),linkKwarg)
+        else:               DrawLink(ax,(legFrom,pFrom,sFrom),(legTo,pTo,sTo),linkKwarg)
+
+        # Mark link as "visited"
+        links[link]= -1
+        links[i] = -1
+
+        # Print link's coordiantes as well
+        #print '===============\n', 'From (leg,p,s) ',(legFrom,pFrom,sFrom), '\nTo   (leg,p,s) ',(legTo,pTo,sTo)
+     
+def DrawLoop(ax,Llinks,bonds,opers,LinksTypes):
+    for i,link in enumerate(Llinks):
+
+        # Get legs coordiantes 
+        (pFrom,legFrom)  = (link[0]//4,link[0]%4)
+        sFrom   = GetSpin(legFrom,bonds[:,opers[pFrom]//2])
+
+        (pTo,legTo)   = (link[1]//4,link[1]%4)
+        sTo   = GetSpin(legTo,bonds[:,opers[pTo]//2])
+
+        # Print link's coordiantes as well
+        #print '===============\n', 'From (leg,p,s) ',(legFrom,pFrom,sFrom),' leg# ',link[0], '\nTo   (leg,p,s) ',(legTo,pTo,sTo),' leg# ',link[1]
+        
+        # Draw link
+        Switch = i%2 == 0
+        if Switch:
+            DrawLink(ax,(legFrom,pFrom,sFrom),(legTo,pTo,sTo),loopKwarg) 
+            #print 'Odd switch'
+        else:
+            if (pFrom == pTo) and (sTo != sFrom):  
+                DrawLink(ax,(legFrom,pFrom,sFrom),(legTo,pTo,sTo),loopKwarg) 
+                #print 'Switch'
+            else:
+                if LinksTypes[link[0]]:   
+                    DrawPeriodicLink(ax,(legFrom,pFrom,sFrom),(legTo,pTo,sTo),loopKwarg)    
+                    #print 'Periodic'
+                else:                   
+                    DrawLink(ax,(legFrom,pFrom,sFrom),(legTo,pTo,sTo), loopKwarg)           
+                    #print 'Link'
+
 def TypeLinks(bonds,links,nonIoper):
     '''
         Build a map LinksTypes which stores for a given leg #
@@ -192,6 +269,7 @@ def TypeLinks(bonds,links,nonIoper):
 
     return LinksTypes
 
+meas = 0
 ###########################################################################
 def main():
     parser = argparse.ArgumentParser(description='Plot Raw MC Equilibration Data for Scalar Estimators.')
@@ -205,6 +283,7 @@ def main():
     
 ###########################################################################
     # Load data
+    titles = ['Initial state','After diagonal move','Loop itinerary','After off-diagonal move']
     FTypes = ['bond', 'vertex','link', 'operator', 'loop','spin']
     FData  = (bonds,vertices,links,opers,loops,spins) = ([],[],[],[],[],[])
 
@@ -223,120 +302,107 @@ def main():
     # Load simulation parameters
     (Nx,Ny,T) = GetFileParams(fname)
     Nspins     = Nx
-    Noperators = len(vertices[meas])
+    xW = Nspins*cellWidth
+    xH = xL + xW
 
+    
     # Iniatiate graphics
-    fig, ax = plt.subplots()
-    plt.connect('key_press_event',kevent.press)
-
-###########################################################################
-    print
-    print '----------------------------'
-    print 'Spins'
-    print spins[meas]
-    # Display current spins state
-    for (i,spin) in enumerate(spins[meas]):
-        DrawSpin(ax,i,spin)
-
-    
-###########################################################################
-    print
-    print '----------------------------'
-    print opers[meas]
-    # Operator's coordiantes
-    (p,s) = (0,0)
-    # List of non-identity operators
-    nonIoper = []
-    # Display current operator state
-    for oper in opers[meas]:
-        if oper == 0: continue 
-        nonIoper.append(oper)
-        s = bonds[0][oper//2]
-        xy = GetOperXYCoords((0,p,s))
-        vtx = vertices[meas][p]
-        DrawVertex(ax,xy,vtx-1)
-        print '---------------\n', '(s,p) = ', (s,p), '\n(x,y) =', xy
-        p += 1
-
-    # Load links type map
-    LinksTypes = TypeLinks(bonds,np.copy(links[meas]),nonIoper)
-    
-###########################################################################
-    print
-    print "-----------Links-----------"
-    print links[meas]
-    print LinksTypes
-    for i,link in enumerate(links[meas]):
-        # Skip if the relevant link has been already visit
-        if link == -1: continue
-
-        # Get the coordiantes of the link's origin
-        (pFrom,legFrom)  = (i//4,i%4)
-        sFrom   = GetSpin(legFrom,bonds[:,nonIoper[pFrom]//2])
-
-        # Get the coordiantes of the link's end 
-        (pTo,legTo)   = (link//4,link%4)
-        sTo   = GetSpin(legTo,bonds[:,nonIoper[pTo]//2])
-
-        # Draw link
-        if LinksTypes[i]:   DrawPeriodicLink(ax,(legFrom,pFrom,sFrom),(legTo,pTo,sTo),linkKwarg)
-        else:               DrawLink(ax,(legFrom,pFrom,sFrom),(legTo,pTo,sTo),linkKwarg)
-
-        # Mark link as "visited"
-        links[meas][link]= -1
-        links[meas][i] = -1
-
-        # Print link's coordiantes as well
-        print '===============\n', 'From (leg,p,s) ',(legFrom,pFrom,sFrom), '\nTo   (leg,p,s) ',(legTo,pTo,sTo)
+    #plt.connect('key_press_even',kevent.press)
+    bdone = False
+    for meas in [86]:#range(len(spins)):
+        fig, axes = plt.subplots(1,4,sharey = True,sharex=True,squeeze=True)
+        meast = meas*3
+        Noperators = 0
+        for i,ax in enumerate(axes):
+            # Generate a list of non-identity operators
+            ax.set_title(titles[i])
+            nonIoper = []
+            for oper in opers[meast]:
+                if oper == 0: continue 
+                nonIoper.append(oper)
+            
+            if len(nonIoper)>Noperators: Noperators=len(nonIoper)
+            yW = Noperators*cellHeight
+            yH = yL + yW
         
+            if i<2:
+                    #Draw Spins
+                    print '\n----------------------------\nSpins\n',spins[meas]
+                    DrawSpins(ax,spins[meas])
+                    
+                    #Draw Operators
+                    print '\n----------------------------\nOperators\n',nonIoper
+                    print '\n----------------------------\nVertices\n', vertices[meas*2]
+                    DrawOperators(ax,nonIoper,bonds,[],False)
+            if i==2:
+                    #Draw Spins
+                    print '\n----------------------------\nSpins\n',spins[meas]
+                    DrawSpins(ax,spins[meas])
+                    
+                    #Draw Operators
+                    print '\n----------------------------\nOperators\n',nonIoper
+                    DrawOperators(ax,nonIoper,bonds,vertices[meas*2],True)
+                    print '\n----------------------------\nVertices\n', vertices[meas*2]
+                    
+                    # Load links type map
+                    print links[meas]
+                    print nonIoper
+                    LinksTypes = TypeLinks(bonds,np.copy(links[meas]),nonIoper)
+                    print LinksTypes
 
-###########################################################################
-    print
-    print "-----------Loops-----------"
-    Llinks = zip( loops[meas], 
-                  np.array(loops[meas])[range( 1, len(loops[meas]) ) + [0]]
-                )
-                
-    Llinks.pop()
-    print LinksTypes
-    print Llinks 
-    for i,link in enumerate(Llinks):
+                    # Build loop tuple list
+                    Llinks = zip( loops[meas], 
+                                  np.array(loops[meas])[range( 1, len(loops[meas]) ) + [0]]
+                                )
+                    Llinks.pop()
 
-        # Get legs coordiantes 
-        (pFrom,legFrom)  = (link[0]//4,link[0]%4)
-        sFrom   = GetSpin(legFrom,bonds[:,nonIoper[pFrom]//2])
-
-        (pTo,legTo)   = (link[1]//4,link[1]%4)
-        sTo   = GetSpin(legTo,bonds[:,nonIoper[pTo]//2])
-
-        # Print link's coordiantes as well
-        print '===============\n', 'From (leg,p,s) ',(legFrom,pFrom,sFrom), '\nTo   (leg,p,s) ',(legTo,pTo,sTo)
-        
-        # Draw link
-        Switch = i%2 == 0
-        if Switch:
-            DrawLink(ax,(legFrom,pFrom,sFrom),(legTo,pTo,sTo),loopKwarg) 
-            print 'Odd switch'
-        else:
-            if (pFrom == pTo) and (sTo != sFrom):  
-                DrawLink(ax,(legFrom,pFrom,sFrom),(legTo,pTo,sTo),loopKwarg) 
-                print 'Switch'
-            else:
-                if LinksTypes[pFrom]:   
-                    DrawPeriodicLink(ax,(legFrom,pFrom,sFrom),(legTo,pTo,sTo),loopKwarg)    
-                    print 'Periodic'
-                else:                   
-                    DrawLink(ax,(legFrom,pFrom,sFrom),(legTo,pTo,sTo), loopKwarg)           
-                    print 'Link'
+                    #Draw Links
+                    #print "\n-----------Links-----------\n",links[meas]
+                    DrawLinks(ax,np.copy(links[meas]),bonds,nonIoper,LinksTypes)
+                       
+                    #Draw Loops
+                    #print "\n-----------Loops-----------\n",Llinks
+                    DrawLoop(ax,Llinks,bonds,nonIoper,LinksTypes)
+            if i==3:
+                    #Draw Spins
+                    print '\n----------------------------\nSpins\n',spins[meas+1]
+                    DrawSpins(ax,spins[meas+1])
+                    
+                    #Draw Operators
+                    print '\n----------------------------\nOperators\n',nonIoper
+                    DrawOperators(ax,nonIoper,bonds,vertices[meas*2+1],True)
+                    print '\n----------------------------\nVertices\n', vertices[meas*2+1]
+     
+            #plt.axis('equal')
+            ax.set_autoscaley_on(False)
+            ax.set_autoscalex_on(False)
+            ax.set_xlim([xL-cradius-rwidth/3.0,xL-cradius-rwidth/3.0+xW])#max(xW,yW)])
+            ax.set_ylim([yL,yL+yW])#max(xW,yW)])
+            meast += 1
+            #plt.gca().set(adjustable='box')
+            #if (prev != 0) and (max(xW,yW)>prev):
+            #    axes[0].set_xlim([xL-cradius-rwidth/3.0,xL-cradius-rwidth/3.0+max(xW,yW)])
+            #    axes[0].set_ylim([yL,yL+max(xW,yW)])
+            #prev = 1    
+            #break 
 
 
-###########################################################################
-    plt.subplots_adjust(left=0, right=1, bottom=0, top=1)
-    plt.axis('equal')
-    #plt.axis('off')
+        #plt.tight_layout()
+        #plt.subplots_adjust(left=0, right=1, bottom=0, top=1,wspace=0)
+        #plt.ylim(yL,yH)
+        #plt.xlim(yL,yH)
+        #plt.ylim(xL-cradius-rwidth/3.0,xH)
+        #plt.xlim(xL-cradius-rwidth/3.0,xH)
+        #plt.axis('off')
 
-    plt.show()
-
+        #plt.xlim(xL+xH,xH/2.0)
+        mng = plt.get_current_fig_manager()
+        mng.resize(*mng.window.maxsize())
+        fig.set_size_inches(30,16)
+        plt.savefig('ssexy_'+str(meas))
+        plt.show()
+        meas += 1
+    print 'haha'
 # ----------------------------------------------------------------------
 # ----------------------------------------------------------------------
 if __name__ == "__main__": 
