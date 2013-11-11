@@ -41,6 +41,8 @@ private:
     vector<long> last;           //for a particular spin site
     vector <long> NvisitedLegs;  //Number of visited legs per MC step
 
+    bool Debug;
+
     //File management
     Communicator communicator;
  

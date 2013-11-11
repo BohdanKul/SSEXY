@@ -27,7 +27,7 @@ Communicator::Communicator(int Nx, int Ny, float T)
 
 void Communicator::GenerateId()
 {
-    id = 301021021;    
+    id = 301021023;    
 }
 
 fstream* Communicator::stream(string _fileName)

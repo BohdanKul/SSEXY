@@ -66,10 +66,11 @@ eng(1),uReal(0,1),uInt(0,65535231),uRandInt(eng,uInt),uRand(eng,uReal), communic
     sm.resize(M,0);  
 
     //Initialize algorithmic variables
-    ESteps = 100;              
-    Nloops = 1;
+    ESteps  = 10000000;              
+    Nloops  = 1;
     NvisitedLegs.resize(Nloops,0);
-    estep = 1;
+    estep = 1000;
+    Debug = false;
 
     //Initialize communicator class
     string eHeader = boost::str(boost::format("#%15s%16s%16s%16s%16s%16s%16s%16s%16s") %"n"%"dn"%"E"%"dE"%"Legs"%"dLegs"%"Magn"%"dMagn"%"M");
@@ -96,17 +97,17 @@ void SSEXY::Equilibrate(){
     long CumvLegs = 0;
     float E = 0;
     for (long step=0; step<ESteps; step++){
-        //Spins output
-        for (vector<long>::iterator spin=spins.begin(); spin!=spins.end(); spin++) 
-            *communicator.stream("spin") << boost::str(boost::format("%6d") %*spin) ;
-        *communicator.stream("spin") << endl;
-       
-        //Operator output 
-        for (vector<long>::iterator oper=sm.begin(); oper!=sm.end(); oper++) 
-            if (not(*oper == 0))
-               *communicator.stream("operator") << boost::str(boost::format("%6d") %*oper) ;
-        *communicator.stream("operator") << endl;
-        
+        if (Debug){
+            //Spins output
+            for (vector<long>::iterator spin=spins.begin(); spin!=spins.end(); spin++) 
+                *communicator.stream("spin") << boost::str(boost::format("%6d") %*spin) ;
+            *communicator.stream("spin") << endl;
+            //Operator output 
+            for (vector<long>::iterator oper=sm.begin(); oper!=sm.end(); oper++) 
+                if (not(*oper == 0))
+                   *communicator.stream("operator") << boost::str(boost::format("%6d") %*oper) ;
+            *communicator.stream("operator") << endl;
+        } 
         //Diagonal move 
         if (DiagonalMove(1.5) == 1){
            M = long(1.2*M);
@@ -115,12 +116,14 @@ void SSEXY::Equilibrate(){
         Cumn += n;
         CumM += M;
 
+        if (Debug){
         //Operator output 
-        for (vector<long>::iterator oper=sm.begin(); oper!=sm.end(); oper++) 
-            //if (not(*oper == 0))
-                *communicator.stream("operator") << boost::str(boost::format("%6d") %*oper) ;
-        *communicator.stream("operator") << endl;
-         
+            for (vector<long>::iterator oper=sm.begin(); oper!=sm.end(); oper++) 
+                //if (not(*oper == 0))
+                    *communicator.stream("operator") << boost::str(boost::format("%6d") %*oper) ;
+            *communicator.stream("operator") << endl;
+        }
+
         //Off-diagonal move
         OffDiagonalMove();
         totalvLegs = 0;
@@ -172,10 +175,10 @@ Below, the left bottom site initiates 2 bonds:
                  sites[b+0][1] = y*Nx+(x+1)%Nx;
                  sites[b+1][0] = y*Nx+x;
                  sites[b+1][1] = ((y+1)%Ny)*Nx+x;
+                 b += 2;
              //    cout << site2[b]<< " ";
              }
              //cout << endl;
-             b += 2;
          } 
     }
     else                                           //A 1-d chain
@@ -323,22 +326,24 @@ void SSEXY::OffDiagonalMove()
             links[first[lspin]] = last[lspin];
         }
     }
-    //Operator output 
-    for (vector<long>::iterator oper=sm.begin(); oper!=sm.end(); oper++) 
-        if (not(*oper==0))
-            *communicator.stream("operator") << boost::str(boost::format("%6d") %*oper) ;
-    *communicator.stream("operator") << endl;
 
-    //Vertex output 
-    for (auto vertex=vtx.begin(); vertex!=vtx.end(); vertex++) 
-        *communicator.stream("vertex") << boost::str(boost::format("%4d") %*vertex) ;
-    *communicator.stream("vertex") << endl;
-    
-    //Link output 
-    for (auto link=links.begin(); link!=links.end(); link++) 
-        *communicator.stream("link") << boost::str(boost::format("%8d") %*link) ;
-    *communicator.stream("link") << endl;
+    if (Debug){
+        //Operator output 
+        for (vector<long>::iterator oper=sm.begin(); oper!=sm.end(); oper++) 
+            if (not(*oper==0))
+                *communicator.stream("operator") << boost::str(boost::format("%6d") %*oper) ;
+        *communicator.stream("operator") << endl;
 
+        //Vertex output 
+        for (auto vertex=vtx.begin(); vertex!=vtx.end(); vertex++) 
+            *communicator.stream("vertex") << boost::str(boost::format("%4d") %*vertex) ;
+        *communicator.stream("vertex") << endl;
+        
+        //Link output 
+        for (auto link=links.begin(); link!=links.end(); link++) 
+            *communicator.stream("link") << boost::str(boost::format("%8d") %*link) ;
+        *communicator.stream("link") << endl;
+    }
     /*cout << "Links \n";
     for (long i=0; i != links.size(); i++){
         cout << setw(4)<<links[i]; 
@@ -367,7 +372,7 @@ void SSEXY::OffDiagonalMove()
         for (long i=0; i!=Nloops; i++) {
             j0 = uRandInt()%(4*n);       //Pick a random loop entrance leg among all possible legs
             j  = j0;
-            *communicator.stream("loop") << boost::str(boost::format("%8d") %j) ;
+            if (Debug) *communicator.stream("loop") << boost::str(boost::format("%8d") %j) ;
             NvisitedLegs[i] = 0;         //Number of visited legs for i'th loop
             //Construct an operator-loop
             do  {
@@ -376,19 +381,19 @@ void SSEXY::OffDiagonalMove()
                     j       = legtype.first +4*p;       //Move to the next leg
                     vtx[p]  = legtype.second;           //Update the type of the operator
                     NvisitedLegs[i] += 1;
-                    *communicator.stream("loop") << boost::str(boost::format("%8d") %j) ;
+                    if (Debug) *communicator.stream("loop") << boost::str(boost::format("%8d") %j) ;
                     
                     if   (j == j0) break;               //If the loop is closed, we are done
                     else{ 
                         j = links[j];                   //Else move to the next linked leg
                         NvisitedLegs[i] += 1;
-                        *communicator.stream("loop") << boost::str(boost::format("%8d") %j) ;
+                        if (Debug) *communicator.stream("loop") << boost::str(boost::format("%8d") %j) ;
                         }
             } while  (j !=j0);                          //Another way to close the loop
-            *communicator.stream("loop") << endl;
+            if (Debug) *communicator.stream("loop") << endl;
         }
      }
-     else *communicator.stream("loop") << endl ;
+     else if (Debug) *communicator.stream("loop") << endl ;
 //     cout << "Constructed "<< Nloops<< " loops " << endl;
 
 //    for (long i=0; i != NvisitedLegs.size(); i++){
@@ -450,9 +455,11 @@ void SSEXY::OffDiagonalMove()
 //   }
      
     //Vertex output 
-   for (auto vertex=vtx.begin(); vertex!=vtx.end(); vertex++) 
-        *communicator.stream("vertex") << boost::str(boost::format("%4d") %*vertex) ;
-    *communicator.stream("vertex") << endl;
+   if (Debug){
+      for (auto vertex=vtx.begin(); vertex!=vtx.end(); vertex++) 
+          *communicator.stream("vertex") << boost::str(boost::format("%4d") %*vertex) ;
+      *communicator.stream("vertex") << endl;
+    }
    return; 
 }
 
@@ -603,7 +610,7 @@ long DeterministicSwitchLeg(long j, long vtype){
 
 int main()
 {
-    SSEXY ssexy(10,1,1.0,4);
+    SSEXY ssexy(4,4,0.01,4);
     ssexy.Equilibrate();
     return 0;
 }
