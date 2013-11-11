@@ -73,7 +73,7 @@ eng(1),uReal(0,1),uInt(0,65535231),uRandInt(eng,uInt),uRand(eng,uReal), communic
     Debug = false;
 
     //Initialize communicator class
-    string eHeader = boost::str(boost::format("#%15s%16s%16s%16s%16s%16s%16s%16s%16s") %"n"%"dn"%"E"%"dE"%"Legs"%"dLegs"%"Magn"%"dMagn"%"M");
+    string eHeader = boost::str(boost::format("#%15s%16s%16s%16s%16s%16s%16s%16s%16s%16s%16s%16s") %"n"%"dn"%"E"%"dE"%"Legs"%"dLegs"%"Magn"%"dMagn"%"M"%"dM"%"rho_s"%"drho_s");
     *communicator.stream("estimator") << eHeader <<endl;    
     
     for (auto bond = ++sites.begin(); bond != sites.end(); bond++)
@@ -89,13 +89,22 @@ eng(1),uReal(0,1),uInt(0,65535231),uRandInt(eng,uInt),uRand(eng,uReal), communic
 void SSEXY::Equilibrate(){
 
     long i;
-    long  totalvLegs = 0;
-    long Cumn = 0;
-    long CumM = 0;
-    long totalMagn = 0;
-    long CumMagn  = 0;
-    long CumvLegs = 0;
-    float E = 0;
+    long  totalvLegs = 0;     //Average number of visited legs
+    long Cumn = 0;            //Cummulative number of non-identity operators  
+    long CumM = 0;            //Cummulative magnetization  
+    long totalMagn = 0;       //Average magnetication  
+    long CumMagn  = 0;        //Cummulative magnetization  
+    long CumvLegs = 0;        //Cummulative number of visited legs  
+    float E = 0;              //Average energy  
+
+    //Spind stiffness variables
+    long WNx  = 0;            //Number of off-diagonal shifts in x-direction 
+    long WNy  = 0;            //Number of off-diagonal shifts in y-direction 
+    long b      = 0;          //Bond index
+    long shift  = 1;          //Takes only 2 values: +1 or -1 depending on an off-diaogonal operator
+    long CumSS  = 0;          //Cummulative spin stiffness
+
+    //Main loop
     for (long step=0; step<ESteps; step++){
         if (Debug){
             //Spins output
@@ -138,13 +147,32 @@ void SSEXY::Equilibrate(){
             totalMagn += *cspin;
         CumMagn += totalMagn;
 
+        Debug = false;
+        //Compute Winding numbers
+        WNx = 0;
+        WNy = 0;
+        ap = spins;                             //Reinitiate the propagated spins state                 
+        for (vector<long>::iterator oper=sm.begin(); oper!=sm.end(); oper++){
+            if  ((*oper)%2==1){
+                //Determine whether the winding number needs to be increased or decreased
+                if  (VertexType(*oper) == 5) shift = -1;
+                else                         shift = +1;
+                //Determine in what direction *oper operates and change corresponding WN
+                b = (long)((*oper-(*oper)%2)/2);                      //Operator's bond
+                if  (b%2) WNy += shift;
+                else      WNx += shift;
+                ap[sites[b][0]] = -ap[sites[b][0]];         //Update the propagated spins state
+                ap[sites[b][1]] = -ap[sites[b][1]]; 
+            }
+        } 
+        CumSS += long(WNx/Nx)*long(WNx/Nx) + long(WNy/Ny)*long(WNy/Ny);        
 
         //Estimators output         
         if (step%estep == 0){
            E = -((float) Cumn/((float) estep*N))/Beta + (float) 1;
-           *communicator.stream("estimator") << boost::str(boost::format("%16.8E%16.8E%16.8E%16.8E%16.8E%16.8E%16.8E%16.8E%16.8E") %(Cumn/(1.0*estep)) %0.0 %E %0.0 %(CumvLegs/(1.0*estep)) %0.0 %(CumMagn/(1.0*estep)) %0.0 %(CumM/(1.0*estep))) << endl;
+           *communicator.stream("estimator") << boost::str(boost::format("%16.8E%16.8E%16.8E%16.8E%16.8E%16.8E%16.8E%16.8E%16.8E%16.8E%16.8E%16.8E") %(Cumn/(1.0*estep)) %0.0 %E %0.0 %(CumvLegs/(1.0*estep)) %0.0 %(CumMagn/(1.0*estep)) %0.0 %(CumM/(1.0*estep)) %0.0 %(CumSS/(2.0*estep*Beta)) %0.0)<< endl;
            //cout << "n = " << setw(7) << (float) Cumn/((float) estep) << " E = " << setw(7) << E << " M = " << setw(9) << (float) CumM/estep << " Legs = " << setw(6) << (float) CumvLegs/estep << " Magnetization " << setw(6) << (float) CumMagn/estep << endl;
-           Cumn = CumM = CumvLegs = CumMagn = 0;
+           Cumn = CumM = CumvLegs = CumMagn = CumSS = 0;
            }      
 
          
@@ -246,10 +274,12 @@ return 0;
 * Determine type of a vertex for a particular operator acting 
 * on a given bond based on its type and current propagated state. 
 **************************************************************/
-long SSEXY::VertexType(long b, long oper)
+long SSEXY::VertexType(long oper)
 {
+    long b = (long)((oper-oper%2)/2);    //Determine operator's bond based on operator's value
     long s0 = ap[sites[b][0]];  
     long s1 = ap[sites[b][1]];
+    //cout << oper << endl;
     if  (oper%2 == 0){
         if  ((s0 ==-1) and (s1 ==-1))
             return 1;
@@ -265,7 +295,9 @@ long SSEXY::VertexType(long b, long oper)
             return 5;
         if  ((s0 == 1) and (s1 ==-1))
             return 6;
-    }      
+    }     
+    cout << "Impossible configuration in VertexType" << endl;
+    return -1; 
 }
 
 
@@ -308,7 +340,7 @@ void SSEXY::OffDiagonalMove()
                 else      last[sites[b][a]]  = 4*p+2;
             }
            
-            vtx[p] = VertexType(b,*oper);                   //Record what type of vertex is it
+            vtx[p] = VertexType(*oper);                   //Record what type of vertex is it
             
             if  (*oper%2 == 1){                             //If it is an off-diagonal operator
                 ap[sites[b][0]] = -ap[sites[b][0]];         //Update the propagated spins state
@@ -610,7 +642,7 @@ long DeterministicSwitchLeg(long j, long vtype){
 
 int main()
 {
-    SSEXY ssexy(4,4,0.01,4);
+    SSEXY ssexy(4,4,0.005,4);
     ssexy.Equilibrate();
     return 0;
 }

@@ -56,7 +56,7 @@ private:
     //Methods
     float BondDiagonalEnergy(long b);
     void  LatticeGeometry();
-    long  VertexType(long b, long oper);
+    long  VertexType(long oper);
 
 public:
     SSEXY(unsigned short _Nx, unsigned short _Ny, float _T, long seed);
