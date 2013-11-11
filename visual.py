@@ -274,7 +274,6 @@ meas = 0
 def main():
     parser = argparse.ArgumentParser(description='Plot Raw MC Equilibration Data for Scalar Estimators.')
     parser.add_argument('--output',  '-o', help= 'SSEXY output files', nargs='+')
-    parser.add_argument('--bond','-b', help= 'Bond file', type=str)
     parser.add_argument('--meas','-m', help= 'Measurement # to display', type=int)
     
 
@@ -309,7 +308,7 @@ def main():
     # Iniatiate graphics
     #plt.connect('key_press_even',kevent.press)
     bdone = False
-    for meas in [86]:#range(len(spins)):
+    for meas in range(args.meas,args.meas+100,1):#range(len(spins)):
         fig, axes = plt.subplots(1,4,sharey = True,sharex=True,squeeze=True)
         meast = meas*3
         Noperators = 0
@@ -399,8 +398,8 @@ def main():
         mng = plt.get_current_fig_manager()
         mng.resize(*mng.window.maxsize())
         fig.set_size_inches(30,16)
-        plt.savefig('ssexy_'+str(meas))
-        plt.show()
+        plt.savefig('Config/ssexy_'+str(meas))
+        #plt.show()
         meas += 1
     print 'haha'
 # ----------------------------------------------------------------------
