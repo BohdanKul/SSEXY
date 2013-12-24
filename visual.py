@@ -308,7 +308,7 @@ def main():
     # Iniatiate graphics
     #plt.connect('key_press_even',kevent.press)
     bdone = False
-    for meas in range(args.meas,args.meas+100,1):#range(len(spins)):
+    for meas in range(args.meas,args.meas+5,1):#range(len(spins)):
         fig, axes = plt.subplots(1,4,sharey = True,sharex=True,squeeze=True)
         meast = meas*3
         Noperators = 0
