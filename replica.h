@@ -26,8 +26,8 @@ private:
     //Algorithmic variables
     long ESteps;                 //Number of equilibration steps    
     long estep;
-    long M;                     //Upper operator list size
-    long n;                     //Current operator list size
+    long M;                     //Operators list size
+    long n;                     //Non-I operators list size
     vector<long> sm;            //Operator vector list
     vector<long> first;         //First and last leg coordinates
     vector<long> last;          //for a particular spin site
@@ -36,8 +36,6 @@ private:
 
     bool Debug;
 
-    //File management
-    Communicator communicator;
  
    
     //Methods
@@ -48,17 +46,19 @@ private:
 public:
 
     Replica(unsigned short _Nx, unsigned short _Ny, float _T, long seed);
-    long DiagonalMove(float ratio);
+    long DiagonalMove();
 
     void Equilibrate();
     void ConstructLinks();
+    void AdjustM();
 
+    vector<vector<long>> getSites()  {return sites;}
     vector<long>* getFirst() {return &first;}
     vector<long>* getLast()  {return &last;}
     vector<long>* getLink()  {return &links;}
     vector<long>* getVtx()   {return &vtx;}
-    vector<long>* getSpin() {return &spins;}
-    vector<long>* getOper() {return &sm;}
+    vector<long>* getSpin()  {return &spins;}
+    vector<long>* getOper()  {return &sm;}
     long          getn()     {return n;}
 };
 #endif

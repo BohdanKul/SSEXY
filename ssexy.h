@@ -15,6 +15,14 @@ class SSEXY: public RandomBase{
     private:
         int r; // order of Renyi entropy
         int Nloops;
+        int binSize;
+        int Nx;
+        int Ny;
+        int N;
+        float Beta;
+        float T;
+        vector<vector<long>> sites;
+        vector<long> ap;
         vector<Replica*> Replicas; 
         vector<long>  Aregion;
         vector<vector<long>*> firsts ;
@@ -25,6 +33,7 @@ class SSEXY: public RandomBase{
         vector<vector<long>*> sms    ;
         vector<long> shifts;
         vector<long> ns;
+        vector<long> Tns;
         
         vector<long> NvisitedLegs;  //Number of visited legs per MC step
         vector<long> LINK; 
@@ -32,7 +41,10 @@ class SSEXY: public RandomBase{
 
         long LegSpin[6][4];
         long nTotal;
+        long nMeas;
         bool Debug;
+        //File management
+        Communicator communicator;
 
         long Bounce(long enLeg);
         long ContinueStraight(long enLeg);
@@ -42,6 +54,7 @@ class SSEXY: public RandomBase{
 
     public:
        SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, long seed); 
-       int MCstep(); 
+       int  MCstep(); 
+       int Measure(); 
 };
 #endif

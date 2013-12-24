@@ -1,3 +1,6 @@
+#ifndef COMMUNICATOR_H
+#define COMMUNICATOR_H
+
 #include <fstream>
 #include <vector>
 #include <unordered_map>
@@ -19,3 +22,4 @@ class Communicator
         void GenerateId();
         unordered_map <string,fstream*> mFStreams;
 }; 
+#endif

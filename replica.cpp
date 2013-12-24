@@ -16,7 +16,7 @@ using namespace std;
 **************************************************************/
 Replica::Replica(unsigned short _Nx, unsigned short _Ny, float _T, long seed):
 //Initialize random objects with default values
-communicator(_Nx,_Ny,_T), RandomBase(seed)
+ RandomBase(seed)
 
 {
   
@@ -58,16 +58,13 @@ communicator(_Nx,_Ny,_T), RandomBase(seed)
     estep = 1000;
     Debug = false;
 
-    //Initialize communicator class
-    string eHeader = boost::str(boost::format("#%15s%16s%16s%16s%16s%16s%16s%16s%16s%16s%16s%16s") %"n"%"dn"%"E"%"dE"%"Legs"%"dLegs"%"Magn"%"dMagn"%"M"%"dM"%"rho_s"%"drho_s");
-    *communicator.stream("estimator") << eHeader <<endl;    
-    
-    for (auto bond = ++sites.begin(); bond != sites.end(); bond++)
-        *communicator.stream("bond") << boost::str(boost::format("%6d%6d") %bond->at(0) %bond->at(1) ) ;
-    *communicator.stream("bond") << endl;
 }
 
 
+void Replica::AdjustM(){
+           M = M+7*long(sqrt(n));
+           sm.resize(M,0); 
+        }
 
 /**************************************************************
 * Equilibration. Parameters adjustment 
@@ -92,34 +89,10 @@ void Replica::Equilibrate(){
 
     //Main loop
     for (long step=0; step<ESteps; step++){
-        if (Debug){
-            //Spins output
-            for (vector<long>::iterator spin=spins.begin(); spin!=spins.end(); spin++) 
-                *communicator.stream("spin") << boost::str(boost::format("%6d") %*spin) ;
-            *communicator.stream("spin") << endl;
-            //Operator output 
-            for (vector<long>::iterator oper=sm.begin(); oper!=sm.end(); oper++) 
-                if (not(*oper == 0))
-                   *communicator.stream("operator") << boost::str(boost::format("%6d") %*oper) ;
-            *communicator.stream("operator") << endl;
-        } 
-        //Diagonal move 
-        if (DiagonalMove(1.5) == 1){
-           M = long(1.2*M);
-           sm.resize(M,0); 
-        }
         Cumn += n;
         CumM += M;
 
-        if (Debug){
-        //Operator output 
-            for (vector<long>::iterator oper=sm.begin(); oper!=sm.end(); oper++) 
-                //if (not(*oper == 0))
-                    *communicator.stream("operator") << boost::str(boost::format("%6d") %*oper) ;
-            *communicator.stream("operator") << endl;
-        }
-
-        
+       
         //Compute Magnetization   
         totalMagn = 0;
         for (vector<long>::iterator cspin = spins.begin(); cspin != spins.end(); cspin++)
@@ -149,7 +122,6 @@ void Replica::Equilibrate(){
         //Estimators output         
         if (step%estep == 0){
            E = -((float) Cumn/((float) estep*N))/Beta + (float) 1;
-           *communicator.stream("estimator") << boost::str(boost::format("%16.8E%16.8E%16.8E%16.8E%16.8E%16.8E%16.8E%16.8E%16.8E%16.8E%16.8E%16.8E") %(Cumn/(1.0*estep)) %0.0 %E %0.0 %(CumvLegs/(1.0*estep)) %0.0 %(CumMagn/(1.0*estep)) %0.0 %(CumM/(1.0*estep)) %0.0 %(CumSS/(2.0*estep*Beta)) %0.0)<< endl;
            //cout << "n = " << setw(7) << (float) Cumn/((float) estep) << " E = " << setw(7) << E << " M = " << setw(9) << (float) CumM/estep << " Legs = " << setw(6) << (float) CumvLegs/estep << " Magnetization " << setw(6) << (float) CumMagn/estep << endl;
            Cumn = CumM = CumvLegs = CumMagn = CumSS = 0;
            }      
@@ -204,7 +176,7 @@ float Replica::BondDiagonalEnergy(long b){
 /**************************************************************
 * Diogonal Monte Carlo move
 **************************************************************/
-long Replica::DiagonalMove(float ratio)
+long Replica::DiagonalMove()
 {
      long b=0;    //Bond index
      float AccP = 0;       //Acceptance probability
@@ -220,8 +192,8 @@ long Replica::DiagonalMove(float ratio)
                 //cout << "I -> D. Operator = " << *oper << endl;
                *oper = 2*b;
                n += 1;               //Update the current operator list length                                         
-               if (((float) M/n)<ratio){       //If it is too close to the max (M), halt the move 
-                   cout << "M/n = " << (float) M/n << " < " << ratio << endl;
+               if (((float) M/n)<1.25){       //If it is too close to the max (M), halt the move 
+                   cout << "M/n = " << (float) M/n << " < " << 1.25 << endl;
                    return 1;   
                }
             }   

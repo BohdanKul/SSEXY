@@ -15,7 +15,7 @@ using namespace std;
 
 //**************************************************************************
 SSEXY::SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, long seed):
-RandomBase(seed)
+communicator(_Nx,_Ny,_T), RandomBase(seed)
 {
     long tmp[6][4] = {  {-1,-1,-1,-1},
                         { 1, 1, 1, 1},
@@ -27,12 +27,19 @@ RandomBase(seed)
     memcpy(LegSpin,tmp,sizeof tmp);
 
     // Initialize replicas
-    r = _r; 
+    Nx = _Nx;
+    Ny = _Ny;
+    N  = Nx*Ny;
+    r = _r;
+    T = _T;
+    Beta = 1.0/(1.0*T); 
     for(int i=0; i!=r; i++){
         Replicas.push_back(new Replica(_Nx,_Ny,_T,seed));
     }
-    Debug = false;
-    Nloops = 1;    
+    Debug   = false;
+    Nloops  = 1;    
+    nMeas   = 0;
+    binSize = 100;
 
     // Initialize data structures
     firsts.resize(r,NULL);
@@ -44,11 +51,66 @@ RandomBase(seed)
     shifts.resize(r,0);
     ns.resize(r,0);
     NvisitedLegs.resize(Nloops,0);
+    Tns.resize(r+1,0);              //+1 is for the totals
     
+    //Debugging data structues
+
+    sites = Replicas[0]->getSites();
+
     // Initialize region A
-    Aregion = {};
+    Aregion =  {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16};//{0,1,2,3,4,5};
+    
+    //Write headers
+    string eHeader = boost::str(boost::format("#%15s%16s%16s%16s%16s%16s")%"nT"%"dnT"%"ET"%"dET"%"Legs"%"dLegs");
+    *communicator.stream("estimator") << eHeader;    
+    if  (r>1)
+        for (int j=0; j!=r; j++){
+            string eHeader = boost::str(boost::format("%15s%i%15s%i%15s%i%15s%i") %"n"%(j+1)%"dn"%(j+1)%"E"%(j+1)%"dE"%(j+1));
+            *communicator.stream("estimator") << eHeader;    
+        }
+    *communicator.stream("estimator") << endl;    
 } 
         
+
+//**************************************************************************
+int SSEXY::Measure()
+{
+    float E;
+    // If we've collected enough of measurements
+    if  (nMeas == binSize){
+        //Record total Energy
+        E = -((float) Tns[r]/((float) binSize*N))/Beta + r*1.0;   //r*1.0 term represents the added energy offset per bond
+        *communicator.stream("estimator") << boost::str(boost::format("%16.8E%16.8E%16.8E%16.8E") %(Tns[r]/(1.0*binSize)) %0.0 %E %0.0);
+        
+        //Record loop data
+        *communicator.stream("estimator") << boost::str(boost::format("%16.8E%16.8E") %(0.0/(1.0*binSize)) %0.0);
+
+        //Record energy of each replica
+        if  (r>1)         
+        
+            for (int j=0; j!=r; j++){
+                E = -((float) Tns[j]/((float) binSize*N))/Beta + 1.0;
+                *communicator.stream("estimator") << boost::str(boost::format("%16.8E%16.8E%16.8E%16.8E") %(Tns[j]/(1.0*binSize)) %0.0 %E %0.0);
+            }
+        *communicator.stream("estimator") << endl;    
+
+        //Set accumulating variables to 0
+        for (int j=0; j!=(r+1); j++)
+            Tns[j] = 0;
+        nMeas = 0;
+    }
+
+    //Otherwise accumulate the new measurement
+    else{
+        for (int j=0; j!=r; j++)
+            Tns[j] += ns[j];
+        Tns[r] += nTotal;
+        nMeas += 1;
+    } 
+    return 0;
+}
+
+
 
 //**************************************************************************
 int SSEXY::MCstep()
@@ -60,7 +122,8 @@ int SSEXY::MCstep()
     //----------------------------------------------------------------------        
     nTotal = 0;
     for (int j=0; j!=r; j++){
-        Replicas[j]->DiagonalMove(1.5);
+        if  (Replicas[j]->DiagonalMove()==1)
+            Replicas[j]->AdjustM();
         Replicas[j]->ConstructLinks();
         firsts[j] = Replicas[j]->getFirst();        
         lasts[j]  = Replicas[j]->getLast();        
@@ -71,9 +134,51 @@ int SSEXY::MCstep()
         ns[j]     = Replicas[j]->getn();
         if (j>0)
             shifts[j] = shifts[j-1] + ns[j-1];
-        cout << "n = " << ns[j] << endl;
+        //cout << "j = " << j << " n = " << links[j]->size()/4.0 << endl;
         nTotal   += ns[j];    
     } 
+    
+//    ap = *spins[0];                             //propagated spins state                 
+//    cout << endl << "==========================" <<endl;
+//    cout << "Initial State " << endl;
+//    for (auto nspin = ap.begin(); nspin!=ap.end(); nspin++)
+//               cout << *nspin << " ";
+//    cout << endl; 
+//    long bond = 0;
+//    for (vector<long>::iterator oper=sms[0]->begin(); oper!=sms[0]->end(); oper++) {
+//
+//        if (*oper != 0)                        //Ignore unit operator
+//            bond = (long)((*oper-(*oper)%2)/2);    //Determine operator's bond based on operator's value
+//        
+//        if  (*oper%2 == 1){                             //If it is an off-diagonal operator
+//            cout << "Operator: " << *oper << endl;
+//            ap[sites[bond][0]] = -ap[sites[bond][0]];         //Update the propagated spins state
+//            ap[sites[bond][1]] = -ap[sites[bond][1]]; 
+//        }
+//    }
+//    
+//    cout << endl << "Propagated State " << endl;
+//    for (auto nspin = ap.begin(); nspin!=ap.end(); nspin++)
+//               cout << *nspin << " ";
+//
+//    cout << endl; 
+//    bool alert = false; 
+//    for (auto aspin=Aregion.begin(); aspin!=Aregion.end(); aspin++) 
+//        if  (spins[1]->at(*aspin) != ap[*aspin])
+//            alert = true;
+//            //cout << "A region spin defect" << endl;  
+//
+//    if (alert){
+//       cout << "-----------------------------Alert-----------------------------" << endl;
+//       for (auto nspin = spins[1]->begin(); nspin!=spins[1]->end(); nspin++)
+//                cout << *nspin << " ";
+//       cout << endl;
+//       for (auto nspin = ap.begin(); nspin!=ap.end(); nspin++)
+//                cout << *nspin << " ";
+//       cout << endl;
+//       }
+//    else
+//        cout << endl << endl << "No Alert" << endl;
     
     //----------------------------------------------------------------------        
     // Shift the values of the leg coordinates by the 
@@ -95,35 +200,35 @@ int SSEXY::MCstep()
         }
     }
     
-    for (int j=0; j!=r; j++){
-        cout << "=============================================" << endl;
-        cout << "link1" << endl;
-        cout << "=============================================" << endl;
-        for (auto link=links[0]->begin(); link!=links[0]->end(); link++){
-            cout << *link << " ";
-        }
-        cout << endl;
-    }
-
-    for (int j=0; j!=r; j++){
-        cout << "=============================================" << endl;
-        cout << "first1" << endl;
-        cout << "=============================================" << endl;
-        for (auto first=firsts[0]->begin(); first!=firsts[0]->end(); first++){
-            cout << *first << " ";
-        }
-        cout << endl;
-    }
-
-    for (int j=0; j!=r; j++){
-        cout << "=============================================" << endl;
-        cout << "last" << j+1 << endl;
-        cout << "=============================================" << endl;
-        for (auto last=lasts[0]->begin(); last!=lasts[0]->end(); last++){
-            cout << *last << " ";
-        }
-        cout << endl;
-    }
+//    for (int j=0; j!=r; j++){
+//        cout << "=============================================" << endl;
+//        cout << "link"<< j << endl;
+//        cout << "=============================================" << endl;
+//        for (auto link=links[j]->begin(); link!=links[j]->end(); link++){
+//            cout << *link << " ";
+//        }
+//        cout << endl;
+//    }
+//
+//    for (int j=0; j!=r; j++){
+//        cout << "=============================================" << endl;
+//        cout << "first"<< j << endl;
+//        cout << "=============================================" << endl;
+//        for (auto first=firsts[j]->begin(); first!=firsts[j]->end(); first++){
+//            cout << *first << " ";
+//        }
+//        cout << endl;
+//    }
+//
+//    for (int j=0; j!=r; j++){
+//        cout << "=============================================" << endl;
+//        cout << "last" << j+1 << endl;
+//        cout << "=============================================" << endl;
+//        for (auto last=lasts[j]->begin(); last!=lasts[j]->end(); last++){
+//            cout << *last << " ";
+//        }
+//        cout << endl;
+//    }
 
    // Merge structures necessary for the loop construction
     LINK = MergeVectors(links);
@@ -173,13 +278,13 @@ int SSEXY::MCstep()
         }//If: spin doesnt belong to A 
     }//Spins loop
 
-    cout << "=============================================" << endl;
-    cout << "LINK" << endl;
-    cout << "=============================================" << endl;
-    for (auto link=LINK.begin(); link!=LINK.end(); link++){
-        cout << *link << " ";
-    }
-    cout << endl;
+//    cout << "=============================================" << endl;
+//    cout << "LINK" << endl;
+//    cout << "=============================================" << endl;
+//    for (auto link=LINK.begin(); link!=LINK.end(); link++){
+//        cout << *link << " ";
+//    }
+//    cout << endl;
     //----------------------------------------------------------------------        
     // Construct loops 
     //----------------------------------------------------------------------        
@@ -193,7 +298,7 @@ int SSEXY::MCstep()
         for (long i=0; i!=Nloops; i++) {
             j0 = uRandInt()%(4*nTotal);       //Pick a random loop entrance leg among all possible legs
             j  = j0;
-            cout << j << " b " << endl;    
+//            cout << j << " b " << endl;    
             //NvisitedLegs[i] = 0;         //Number of visited legs for i'th loop
             //Construct an operator-loop
             do  {
@@ -202,12 +307,12 @@ int SSEXY::MCstep()
                     j       = legtype.first +4*p;       //Move to the next leg
                     VTX[p]  = legtype.second;           //Update the type of the operator
                     NvisitedLegs[i] += 1;
-                    cout << j << "  b" << endl;
+//                  cout << j << "  b" << endl;
                     if   (j == j0) break;               //If the loop is closed, we are done
                     else{ 
                         j = LINK[j];                   //Else move to the next linked leg
                         NvisitedLegs[i] += 1;
-                        cout << j << " b" << endl;    
+//                        cout << j << " b" << endl;    
                     }
             } while  (j !=j0);                          //Another way to close the loop
         }    
@@ -231,20 +336,71 @@ int SSEXY::MCstep()
     //----------------------------------------------------------------------        
     //  Map back the changes to the spins state
     //----------------------------------------------------------------------        
+    bool previous;
+    bool flipRand;
+    for (long j=0; j!=firsts[0]->size(); j++){
+        if  (find(Aregion.begin(),Aregion.end(),j)!=Aregion.end()){
+            previous = false;
+            flipRand = true;
+            for (int k=0; k!=r; k++){
+                //If the spin is inactive in the current replica
+                if  (firsts[k]->at(j)==-1){                        //If the spin is not acted upon
+                    //But if it was active in the previous replica, the
+                    //current replica spin must get changed according 
+                    //to its last leg type in the preivous replica
+                    if  (previous == true){
+                        p   = (long) lasts[k-1]->at(j)/4;          //Get the last operator acting on it
+                        leg = (long) lasts[k-1]->at(j)%4;          //Get the spin's leg on this operator  
+                        spins[k]->at(j) = LegSpin[VTX[p]-1][leg];  //Use the leg/operator-type -> spin-type map
+                    }
+                }
+                //If the spin is active in the current replica
+                else{
+                    //If the spin was active in the previous replica,
+                    //just update the current replica spin type.
+                    if  (previous == true){
+                        p   = (long) firsts[k]->at(j)/4;          //Get the first operator acting on it
+                        leg = (long) firsts[k]->at(j)%4;          //Get the spin's leg on this operator  
+                        spins[k]->at(j) = LegSpin[VTX[p]-1][leg]; //Use the leg/operator-type -> spin-type map
+                    }
+                    //Otherwise, synchronize the spin type in all previous
+                    //replicas having this spin inactive with the current 
+                    //replica spin type.
+                    else{
+                        //Determine the new spin type
+                        p   = (long) firsts[k]->at(j)/4;          //Get the first operator acting on it
+                        leg = (long) firsts[k]->at(j)%4;          //Get the spin's leg on this operator  
+                        spins[k]->at(j) = LegSpin[VTX[p]-1][leg]; //Use the leg/operator-type -> spin-type map
+                        //Synchronize it with previous replicas
+                        for (int t=k; t!=0; t--)
+                            if   (firsts[t-1]->at(j) != -1) break;
+                            else spins[t-1]->at(j) = spins[k]->at(j);
+                    } 
+                    flipRand = false;
+                    previous = true;
+                }//else if the spin is active     
+            }//replica loop
 
-    for (int k=0; k!=r; k++){
-        for (long j=0; j!=firsts[k]->size(); j++){
-            if  (firsts[k]->at(j)==-1){                  //If the spin is not acted by an operator P
-                if  (Replicas[k]->uRand()<0.5)             //Flip it randomly
-                    spins[k]->at(j) = -spins[k]->at(j); 
+            //if the spin is inactive in all replicas
+            //flip it randomly 
+            if  (flipRand == true)
+                if  (Replicas[0]->uRand()<0.5)
+                    for (int k=0; k!=r; k++)
+                        spins[k]->at(j) = -spins[k]->at(j); 
+        }//if the spin belongs to region A
+        else    
+            for (int k=0; k!=r; k++){
+                if  (firsts[k]->at(j)==-1){                    //If the spin is not acted upon
+                    if  (Replicas[k]->uRand()<0.5)             //Flip it randomly
+                        spins[k]->at(j) = -spins[k]->at(j); 
+                }
+                else{
+                    p   = (long) firsts[k]->at(j)/4;          //Get the first operator acting on it
+                    leg = (long) firsts[k]->at(j)%4;          //Get the spin's leg on this operator  
+                    spins[k]->at(j) = LegSpin[VTX[p]-1][leg]; //Use the leg/operator-type -> spin-type map
+                }
             }
-            else{
-                p   = (long) firsts[k]->at(j)/4;          //Get the first operator acting on it
-                leg = (long) firsts[k]->at(j)%4;          //Get the spin's leg on this operator  
-                spins[k]->at(j) = LegSpin[VTX[p]-1][leg]; //Use the leg/operator-type -> spin-type map
-            }
-        }//Spins loop 
-     }//Replica loop  
+     }//Spins loop 
 }
 
 //#################################################################
@@ -362,9 +518,10 @@ return pair <long,long> (exLeg,newtype);
  
 int main()
 {
-    SSEXY ssexy(1,6,1,0.1,5);  
-    for (int i=0; i!=1000; i++){
+    SSEXY ssexy(2,4,4,2.0,5);  
+    for (int i=0; i!=20055000; i++){
         ssexy.MCstep();
+        ssexy.Measure();
     }
     return 0;
 } 
