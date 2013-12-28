@@ -3,8 +3,6 @@
 #include "randombase.h"
 #include "replica.h"
 #include <vector>
-
-
 using namespace std;
 
 
@@ -53,7 +51,7 @@ class SSEXY: public RandomBase{
         pair<long,long> SwitchLeg(long leg, long vtype);
 
     public:
-       SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, long seed); 
+       SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, vector<long>* _Aregion); 
        int  MCstep(); 
        int Measure(); 
 };

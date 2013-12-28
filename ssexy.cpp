@@ -1,4 +1,5 @@
 #include <iostream>
+#include <sstream>
 #include "ssexy.h"
 #include "replica.cpp"
 //#include "communicator.h"
@@ -8,14 +9,15 @@
 #include <string.h>
 #include <iomanip>
 #include "helper.cpp"
+#include <boost/program_options.hpp>
 
-using namespace std;
+namespace po = boost::program_options;
 
 
 
 //**************************************************************************
-SSEXY::SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, long seed):
-communicator(_Nx,_Ny,_T), RandomBase(seed)
+SSEXY::SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, vector<long>* _Aregion):
+communicator(_Nx,_Ny,_T,seed), RandomBase(seed)
 {
     long tmp[6][4] = {  {-1,-1,-1,-1},
                         { 1, 1, 1, 1},
@@ -31,8 +33,16 @@ communicator(_Nx,_Ny,_T), RandomBase(seed)
     Ny = _Ny;
     N  = Nx*Ny;
     r = _r;
-    T = _T;
-    Beta = 1.0/(1.0*T); 
+    
+    //Define temperature in one of two ways
+    if (_T != -1){
+        T = _T;
+        Beta = 1.0/(1.0*T);
+    }
+    else{
+        Beta = _Beta;
+        T = 1.0/(1.0*_Beta);
+    } 
     for(int i=0; i!=r; i++){
         Replicas.push_back(new Replica(_Nx,_Ny,_T,seed));
     }
@@ -58,7 +68,7 @@ communicator(_Nx,_Ny,_T), RandomBase(seed)
     sites = Replicas[0]->getSites();
 
     // Initialize region A
-    Aregion =  {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16};//{0,1,2,3,4,5};
+    Aregion = *_Aregion; 
     
     //Write headers
     string eHeader = boost::str(boost::format("#%15s%16s%16s%16s%16s%16s")%"nT"%"dnT"%"ET"%"dET"%"Legs"%"dLegs");
@@ -516,9 +526,70 @@ return pair <long,long> (exLeg,newtype);
 //######################################################################
 
  
-int main()
+int main(int argc, char *argv[])
 {
-    SSEXY ssexy(2,4,4,2.0,5);  
+    po::options_description cmdLineOptions("Command line options"); 
+    po::variables_map params;
+    cmdLineOptions.add_options()
+            ("help,h", "produce help message")
+            ("temperature,T",po::value<double>()->default_value(-1), "temperature")
+            ("beta,b",       po::value<double>()->default_value(-1),"inverse temperature")
+            ("width,x",      po::value<int>(),"lattice width")
+            ("height,y",     po::value<int>()->default_value(1),"lattice height")
+            ("process_id,p", po::value<int>()->default_value(0),"process id")
+            ("replica,r",    po::value<int>()->default_value(1),"number of replicas")
+            ("state,s",      po::value<string>()->default_value(""),"path to the state file")
+            ("region_A,a",   po::value<string>()->default_value(""),"path to the file defining region A");
+    po::store(po::parse_command_line(argc, argv, cmdLineOptions), params);
+    po::notify(params);
+
+    if (params.count("help")) {
+       cout << cmdLineOptions << "\n";
+       return 1;
+    } 
+    
+    if  ((params["temperature"].as<double>() != -1) && (params["beta"].as<double>() != -1)){
+        cerr << "Error: simultanious definition of temperature via T and beta parameters" << endl;
+        return 1; 
+    }
+    
+    if  (!(params.count("width"))){
+        cerr << "Error: define lattice width" << endl;
+        return 1; 
+    }
+    
+    if  ((params["temperature"].as<double>() == -1) && (params["beta"].as<double>() == -1)){
+        cerr << "Error: define temperature via beta or T paramater" << endl;
+        return 1; 
+    }
+
+    vector<long> Aregion ={};
+    if  (params["region_A"].as<string>()=="" ){
+        cout << "Taking A region to be empty" << endl;
+    }
+    else{
+        ifstream RAfile (params["region_A"].as<string>());
+        string line;
+        string lline;
+        if  (RAfile.is_open()){
+            while (getline(RAfile,line))
+                  lline=line;
+            RAfile.close();
+            istringstream sline(lline.erase(0,1));
+            int n;
+            while (sline >> n)
+                Aregion.push_back(n);
+        }
+        else{
+            cout << "Unable to process region A file" << endl;
+            return 1;
+            }    
+        }
+
+
+    SSEXY ssexy(params["replica"].as<int>(), params["width"].as<int>(),
+                params["height"].as<int>(),  params["temperature"].as<double>(), 
+                params["beta"].as<double>(),5, &Aregion);  
     for (int i=0; i!=20055000; i++){
         ssexy.MCstep();
         ssexy.Measure();
