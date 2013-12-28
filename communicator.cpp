@@ -2,19 +2,22 @@
 #include <fstream>
 #include "communicator.h"
 #include <boost/format.hpp>
+#include <boost/filesystem.hpp>
+#include <time.h>
 
 using namespace std;
 //using boost::lexical_cast;
 
-Communicator::Communicator(int Nx, int Ny, float T)
+Communicator::Communicator(int _Nx, int _Ny, float _T, long _p)
 {
+    p = _p;
     types  = vector<string> {"spin","link","loop","operator","estimator","bond","vertex"};
     outDir = "OUTPUT"; 
     GenerateId();
-    dataName = boost::str(boost::format("%03d-%03d-%06.3f-%09d") %Nx %Ny %T %id);
+    dataName = boost::str(boost::format("%03d-%03d-%06.3f") %_Nx %_Ny %_T);
     string  fileName;
     for (vector<string>::iterator type=types.begin(); type!=types.end(); type++){
-        fileName = boost::str(boost::format("%s/%s-%s.dat") %outDir %*type %dataName);
+        fileName = boost::str(boost::format("%s/%s-%s-%09d.dat") %outDir %*type %dataName %id);
         mFStreams[*type] = new fstream(fileName,ios_base::out);
         if (!*mFStreams[*type]){
            cerr << "Unable to process file: " << fileName << endl;
@@ -27,12 +30,26 @@ Communicator::Communicator(int Nx, int Ny, float T)
 
 void Communicator::GenerateId()
 {
-    id = 200000000;    
+    time_t seconds = long(time(NULL) - 39*365*24*60*60);
+    id = long(seconds + p);
+    string fName;
+    fName = boost::str(boost::format("OUTPUT/estimator-%s-%09d.dat") % dataName %id);
+    boost::filesystem::path logPath(fName);
+
+    while(boost::filesystem::exists(logPath)) {
+        id += 1;
+        fName = boost::str(boost::format("OUTPUT/estimator-%s-%09d.dat") % dataName %id);
+        logPath = boost::filesystem::path(fName);
+
+    }
+
 }
 
 fstream* Communicator::stream(string _fileName)
 {
     return mFStreams[_fileName];
+
+
 }
 
 //int main()

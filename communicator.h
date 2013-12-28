@@ -10,7 +10,7 @@ using namespace std;
 class Communicator
 {
     public:
-        Communicator(int Nx, int Ny, float T);
+        Communicator(int Nx, int Ny, float T, long process);
         fstream* stream(string _fileName); 
         string dataName;
         string outDir;
@@ -18,7 +18,8 @@ class Communicator
         vector <fstream> files;   
 
     private:
-        unsigned long id;
+        long id;
+        long p;
         void GenerateId();
         unordered_map <string,fstream*> mFStreams;
 }; 
