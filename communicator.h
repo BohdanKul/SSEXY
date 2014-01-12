@@ -10,8 +10,11 @@ using namespace std;
 class Communicator
 {
     public:
-        Communicator(int Nx, int Ny, float T, long process);
+        Communicator(int Nx, int Ny, float _T, float _Beta, long process, string rfName);
         fstream* stream(string _fileName); 
+        void     reset(string _fileName);
+        long     getId(){return id;};
+
         string dataName;
         string outDir;
         vector <string>   types;

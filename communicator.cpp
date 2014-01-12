@@ -8,17 +8,33 @@
 using namespace std;
 //using boost::lexical_cast;
 
-Communicator::Communicator(int _Nx, int _Ny, float _T, long _p)
+Communicator::Communicator(int _Nx, int _Ny, float _T, float _Beta, long _p, string rfName)
 {
     p = _p;
-    types  = vector<string> {"spin","link","loop","operator","estimator","bond","vertex"};
+    //Define temperature in one of two ways
+    cout << "communcator" << endl;
+    if (_T == -1)
+        _T = 1.0/(1.0*_Beta);
+    types  = vector<string> {"state","estimator"};
     outDir = "OUTPUT"; 
-    GenerateId();
+    if  (rfName=="") 
+        GenerateId();
+    else{
+        boost::filesystem::path filePath(rfName);
+        id = atol(filePath.leaf().string().substr(21,9).c_str());
+        }
     dataName = boost::str(boost::format("%03d-%03d-%06.3f") %_Nx %_Ny %_T);
     string  fileName;
     for (vector<string>::iterator type=types.begin(); type!=types.end(); type++){
         fileName = boost::str(boost::format("%s/%s-%s-%09d.dat") %outDir %*type %dataName %id);
-        mFStreams[*type] = new fstream(fileName,ios_base::out);
+        //State files are read-only at first
+        if ((rfName!="") and (*type=="state")){
+            cout << fileName;    
+            mFStreams[*type] = new fstream(fileName,ios_base::in);
+        }
+        //Other files are write by appending
+        else
+            mFStreams[*type] = new fstream(fileName,ios_base::out|ios_base::app);
         if (!*mFStreams[*type]){
            cerr << "Unable to process file: " << fileName << endl;
            exit(EXIT_FAILURE); 
@@ -45,18 +61,17 @@ void Communicator::GenerateId()
 
 }
 
+void Communicator::reset(string _fileName)
+{
+    mFStreams[_fileName]->close();
+    string fileName = boost::str(boost::format("%s/%s-%s-%09d.dat") %outDir %_fileName %dataName %id);
+    mFStreams[_fileName]->open(fileName, fstream::out|fstream::trunc);
+}
+
 fstream* Communicator::stream(string _fileName)
 {
     return mFStreams[_fileName];
 
-
 }
 
-//int main()
-//{
-//    Communicator communicator(4,4,1.01);
-//    cout << communicator.types[0] << endl;
-//    *communicator.stream("spin") << "yo" << endl;
-//    return 0;
-//}
 
