@@ -16,8 +16,8 @@ namespace po = boost::program_options;
 
 
 //**************************************************************************
-SSEXY::SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, vector<long>* _Aregion):
-communicator(_Nx,_Ny,_T,seed), RandomBase(seed)
+SSEXY::SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, vector<long>* _Aregion, string frName):
+communicator(_Nx,_Ny,_T,_Beta,seed,frName), RandomBase(seed)
 {
     long tmp[6][4] = {  {-1,-1,-1,-1},
                         { 1, 1, 1, 1},
@@ -27,13 +27,15 @@ communicator(_Nx,_Ny,_T,seed), RandomBase(seed)
                         { 1,-1, 1,-1}
                     };
     memcpy(LegSpin,tmp,sizeof tmp);
+    //Store the simulation id
+    SSEXID = communicator.getId();
 
     // Initialize replicas
     Nx = _Nx;
     Ny = _Ny;
     N  = Nx*Ny;
     r = _r;
-    
+
     //Define temperature in one of two ways
     if (_T != -1){
         T = _T;
@@ -43,13 +45,22 @@ communicator(_Nx,_Ny,_T,seed), RandomBase(seed)
         Beta = _Beta;
         T = 1.0/(1.0*_Beta);
     } 
+    
+    //Initiate the replicas
     for(int i=0; i!=r; i++){
-        Replicas.push_back(new Replica(_Nx,_Ny,_T,seed));
+        Replicas.push_back(new Replica(_Nx,_Ny,T,seed, i+1));
     }
-    Debug   = false;
-    Nloops  = 1;    
-    nMeas   = 0;
-    binSize = 100;
+    
+    //Load replicas' datastructures if needed
+    if (frName!="") LoadState();
+    
+    Debug    = false;
+    Nloops   = 1;    
+    nMeas    = 0;
+    binSize  = 100;
+    saveFreq = 1; 
+    nSaved   = 0;
+    maxLoopSize = 2400000;
 
     // Initialize data structures
     firsts.resize(r,NULL);
@@ -61,6 +72,7 @@ communicator(_Nx,_Ny,_T,seed), RandomBase(seed)
     shifts.resize(r,0);
     ns.resize(r,0);
     NvisitedLegs.resize(Nloops,0);
+    TNvisitedLegs.resize(Nloops,0);
     Tns.resize(r+1,0);              //+1 is for the totals
     
     //Debugging data structues
@@ -70,30 +82,77 @@ communicator(_Nx,_Ny,_T,seed), RandomBase(seed)
     // Initialize region A
     Aregion = *_Aregion; 
     
-    //Write headers
-    string eHeader = boost::str(boost::format("#%15s%16s%16s%16s%16s%16s")%"nT"%"dnT"%"ET"%"dET"%"Legs"%"dLegs");
-    *communicator.stream("estimator") << eHeader;    
-    if  (r>1)
-        for (int j=0; j!=r; j++){
-            string eHeader = boost::str(boost::format("%15s%i%15s%i%15s%i%15s%i") %"n"%(j+1)%"dn"%(j+1)%"E"%(j+1)%"dE"%(j+1));
-            *communicator.stream("estimator") << eHeader;    
-        }
-    *communicator.stream("estimator") << endl;    
+    //Write headers for a new estimator file
+    if (frName==""){
+        string eHeader = boost::str(boost::format("#%15s%16s%16s%16s%16s%16s")%"nT"%"dnT"%"ET"%"dET"%"Legs"%"dLegs");
+        *communicator.stream("estimator") << eHeader;    
+        if  (r>1)
+            for (int j=0; j!=r; j++){
+                string eHeader = boost::str(boost::format("%15s%i%15s%i%15s%i%15s%i") %"n"%(j+1)%"dn"%(j+1)%"E"%(j+1)%"dE"%(j+1));
+                *communicator.stream("estimator") << eHeader;    
+            }
+        *communicator.stream("estimator") << endl;    
+    }
 } 
         
+int SSEXY::AdjustParameters()
+{
+    long Tn;    //Cummulative n
+    long TLegs; //Cummulative Legs
+    Tn    = 0;
+    TLegs = 0;
+
+    //Run simulation without recording results
+    for (int i=0; i!=100; i++){
+        //Perform a Monte-Carlo step
+        MCstep();
+        //Accumulate M's
+        for (int j=0; j!=r; j++)
+            Tn += Replicas[j]->getn();
+        //Accumulate legs 
+        for (int j=0; j!=Nloops; j++)
+            TLegs += NvisitedLegs[j];
+    } 
+    
+    //Increase Nloops if not enough legs
+    // are being generated
+    if  (TLegs > 2*Tn)
+        return 0;
+    else{
+        Nloops += 1;
+        NvisitedLegs.resize(Nloops,0);
+        TNvisitedLegs.resize(Nloops,0);
+        cout << SSEXID << ": Legs = " << TLegs/100.0 << " 2xnT = " << Tn*2/100.0 << endl;
+        cout << SSEXID << ": Increase # of loops to " << Nloops << endl;
+        return 1;
+    }
+}
 
 //**************************************************************************
 int SSEXY::Measure()
 {
-    float E;
+    //Accumulate the new measurement
+    nMeas += 1;
+    for (int j=0; j!=r; j++)
+        Tns[j] += ns[j];
+    Tns[r] += nTotal;
+
+    //Accumulate the legs 
+    for (int j=0; j!=Nloops; j++)
+        TNvisitedLegs[j] += NvisitedLegs[j];
+
     // If we've collected enough of measurements
+    float E;
+    long  TNLegs = 0;
     if  (nMeas == binSize){
         //Record total Energy
         E = -((float) Tns[r]/((float) binSize*N))/Beta + r*1.0;   //r*1.0 term represents the added energy offset per bond
         *communicator.stream("estimator") << boost::str(boost::format("%16.8E%16.8E%16.8E%16.8E") %(Tns[r]/(1.0*binSize)) %0.0 %E %0.0);
         
         //Record loop data
-        *communicator.stream("estimator") << boost::str(boost::format("%16.8E%16.8E") %(0.0/(1.0*binSize)) %0.0);
+        for (int j=0; j!=Nloops; j++)
+            TNLegs += TNvisitedLegs[j];
+        *communicator.stream("estimator") << boost::str(boost::format("%16.8E%16.8E") %(TNLegs*1.0/(1.0*binSize)) %0.0);
 
         //Record energy of each replica
         if  (r>1)         
@@ -107,18 +166,123 @@ int SSEXY::Measure()
         //Set accumulating variables to 0
         for (int j=0; j!=(r+1); j++)
             Tns[j] = 0;
-        nMeas = 0;
+        nMeas  = 0;
+        
+        for (int j=0; j!=Nloops; j++)
+            TNvisitedLegs[j]=0;
+        
+        //Increase the counter of recordered bins
+        nSaved += 1;
+        if  (nSaved == saveFreq){
+            SaveState();
+            nSaved = 0;
+        
+        //Notify about a new measurement taken
+        cout << SSEXID << ": Measurement taken" << endl;
+        }
     }
 
-    //Otherwise accumulate the new measurement
-    else{
-        for (int j=0; j!=r; j++)
-            Tns[j] += ns[j];
-        Tns[r] += nTotal;
-        nMeas += 1;
-    } 
     return 0;
 }
+
+int SSEXY::SaveState(){
+    //Erase previous state info
+    communicator.reset("state");
+
+    //Save the state of the random generator
+    uRandInt.distribution().reset(); 
+    uRand.distribution().reset(); 
+    *communicator.stream("state") << eng << endl;
+    
+    //Save each replica's state
+    for (int j=0; j!=r; j++){
+        //Save random-engine internal state
+        Replicas[j]->uRandInt.distribution().reset(); 
+        Replicas[j]->uRand.distribution().reset(); 
+        *communicator.stream("state") << Replicas[j]->eng;
+        *communicator.stream("state") << endl;
+
+        //Save operators
+        for (auto oper = Replicas[j]->getOper()->begin(); oper!=Replicas[j]->getOper()->end(); oper++){
+            *communicator.stream("state") << *oper << " ";
+        }
+        *communicator.stream("state") << endl;
+
+        //Save spins
+        for (auto spin= Replicas[j]->getSpin()->begin(); spin!=Replicas[j]->getSpin()->end(); spin++){
+            *communicator.stream("state") << *spin << " ";
+        }
+        *communicator.stream("state") << endl;
+    }   
+}
+
+int SSEXY::LoadState(){
+    int n;
+    int i;
+    long N;    
+
+    //First load ssexy generator state
+
+    //Buffer variables
+    string       sBuf0;
+    stringstream ssBuf0;    
+    
+    //Load random-engine internal state
+    uRandInt.distribution().reset(); 
+    uRand.distribution().reset(); 
+    getline(*communicator.stream("state"),sBuf0);     //1st line of the state file 
+    ssBuf0 << sBuf0;                                   
+    ssBuf0 >> eng;
+
+    //Save each replica's state
+    for (int j=0; j!=r; j++){
+        //Buffer variables
+        string       sBuf;
+        stringstream ssBuf;    
+        //cout << "Replica #" << j+1 << endl;
+        //Load random-engine internal state
+        Replicas[j]->uRandInt.distribution().reset(); 
+        Replicas[j]->uRand.distribution().reset(); 
+        getline(*communicator.stream("state"),sBuf);     //1st line of the state file 
+        ssBuf << sBuf;                                   
+        ssBuf >> Replicas[j]->eng;
+
+        //Load operators
+        istringstream issBuf1;
+        getline(*communicator.stream("state"),sBuf);     //2nd line of the state file
+        issBuf1.str(sBuf);
+        Replicas[j]->getOper()->resize(0,0);
+        N = 0;                                           //Non-identity operator counter
+        while (issBuf1 >> n){
+              if (n!=0) N += 1;
+              Replicas[j]->getOper()->push_back(n);
+        }
+        Replicas[j]->setn(N);
+        Replicas[j]->setM(Replicas[j]->getOper()->size());
+        ////cout << "n = " << N << " M = " << Replicas[j]->getOper()->size() << endl;
+        //cout << "Operators line: " << sBuf << endl;
+        //cout << "Operators:" << endl;
+        //for (auto oper=Replicas[j]->getOper()->begin(); oper!=Replicas[j]->getOper()->end(); oper++)
+        //    cout << *oper << " ";
+        //cout << endl;
+
+        //Load spins
+        istringstream issBuf2;
+        getline(*communicator.stream("state"),sBuf);     //3rd line of the state file
+        issBuf2.str(sBuf);
+        i=0;
+        //cout << "----- spins------" << endl;
+        while (issBuf2 >> n){
+            Replicas[j]->getSpin()->at(i)=n;
+            i += 1;
+        }
+        //cout << "Spins line: " << sBuf << endl;
+        //cout << "Spins:" << endl;
+        //for (auto spin=Replicas[j]->getSpin()->begin(); spin!=Replicas[j]->getSpin()->end(); spin++)
+        //    cout << *spin << " ";
+        //cout << endl;
+    }   
+}    
 
 
 
@@ -144,52 +308,10 @@ int SSEXY::MCstep()
         ns[j]     = Replicas[j]->getn();
         if (j>0)
             shifts[j] = shifts[j-1] + ns[j-1];
-        //cout << "j = " << j << " n = " << links[j]->size()/4.0 << endl;
         nTotal   += ns[j];    
     } 
     
-//    ap = *spins[0];                             //propagated spins state                 
-//    cout << endl << "==========================" <<endl;
-//    cout << "Initial State " << endl;
-//    for (auto nspin = ap.begin(); nspin!=ap.end(); nspin++)
-//               cout << *nspin << " ";
-//    cout << endl; 
-//    long bond = 0;
-//    for (vector<long>::iterator oper=sms[0]->begin(); oper!=sms[0]->end(); oper++) {
-//
-//        if (*oper != 0)                        //Ignore unit operator
-//            bond = (long)((*oper-(*oper)%2)/2);    //Determine operator's bond based on operator's value
-//        
-//        if  (*oper%2 == 1){                             //If it is an off-diagonal operator
-//            cout << "Operator: " << *oper << endl;
-//            ap[sites[bond][0]] = -ap[sites[bond][0]];         //Update the propagated spins state
-//            ap[sites[bond][1]] = -ap[sites[bond][1]]; 
-//        }
-//    }
-//    
-//    cout << endl << "Propagated State " << endl;
-//    for (auto nspin = ap.begin(); nspin!=ap.end(); nspin++)
-//               cout << *nspin << " ";
-//
-//    cout << endl; 
-//    bool alert = false; 
-//    for (auto aspin=Aregion.begin(); aspin!=Aregion.end(); aspin++) 
-//        if  (spins[1]->at(*aspin) != ap[*aspin])
-//            alert = true;
-//            //cout << "A region spin defect" << endl;  
-//
-//    if (alert){
-//       cout << "-----------------------------Alert-----------------------------" << endl;
-//       for (auto nspin = spins[1]->begin(); nspin!=spins[1]->end(); nspin++)
-//                cout << *nspin << " ";
-//       cout << endl;
-//       for (auto nspin = ap.begin(); nspin!=ap.end(); nspin++)
-//                cout << *nspin << " ";
-//       cout << endl;
-//       }
-//    else
-//        cout << endl << endl << "No Alert" << endl;
-    
+   
     //----------------------------------------------------------------------        
     // Shift the values of the leg coordinates by the 
     // total number of legs in previous replicas
@@ -210,36 +332,6 @@ int SSEXY::MCstep()
         }
     }
     
-//    for (int j=0; j!=r; j++){
-//        cout << "=============================================" << endl;
-//        cout << "link"<< j << endl;
-//        cout << "=============================================" << endl;
-//        for (auto link=links[j]->begin(); link!=links[j]->end(); link++){
-//            cout << *link << " ";
-//        }
-//        cout << endl;
-//    }
-//
-//    for (int j=0; j!=r; j++){
-//        cout << "=============================================" << endl;
-//        cout << "first"<< j << endl;
-//        cout << "=============================================" << endl;
-//        for (auto first=firsts[j]->begin(); first!=firsts[j]->end(); first++){
-//            cout << *first << " ";
-//        }
-//        cout << endl;
-//    }
-//
-//    for (int j=0; j!=r; j++){
-//        cout << "=============================================" << endl;
-//        cout << "last" << j+1 << endl;
-//        cout << "=============================================" << endl;
-//        for (auto last=lasts[j]->begin(); last!=lasts[j]->end(); last++){
-//            cout << *last << " ";
-//        }
-//        cout << endl;
-//    }
-
    // Merge structures necessary for the loop construction
     LINK = MergeVectors(links);
     VTX  = MergeVectors(vtxs);
@@ -288,13 +380,7 @@ int SSEXY::MCstep()
         }//If: spin doesnt belong to A 
     }//Spins loop
 
-//    cout << "=============================================" << endl;
-//    cout << "LINK" << endl;
-//    cout << "=============================================" << endl;
-//    for (auto link=LINK.begin(); link!=LINK.end(); link++){
-//        cout << *link << " ";
-//    }
-//    cout << endl;
+ 
     //----------------------------------------------------------------------        
     // Construct loops 
     //----------------------------------------------------------------------        
@@ -308,8 +394,7 @@ int SSEXY::MCstep()
         for (long i=0; i!=Nloops; i++) {
             j0 = uRandInt()%(4*nTotal);       //Pick a random loop entrance leg among all possible legs
             j  = j0;
-//            cout << j << " b " << endl;    
-            //NvisitedLegs[i] = 0;         //Number of visited legs for i'th loop
+            NvisitedLegs[i] = 0;         //Number of visited legs for i'th loop
             //Construct an operator-loop
             do  {
                     p = (long) j/4;                     //Current operator index
@@ -317,13 +402,18 @@ int SSEXY::MCstep()
                     j       = legtype.first +4*p;       //Move to the next leg
                     VTX[p]  = legtype.second;           //Update the type of the operator
                     NvisitedLegs[i] += 1;
-//                  cout << j << "  b" << endl;
                     if   (j == j0) break;               //If the loop is closed, we are done
                     else{ 
                         j = LINK[j];                   //Else move to the next linked leg
                         NvisitedLegs[i] += 1;
-//                        cout << j << " b" << endl;    
                     }
+                    
+                    //Limit the maximum loop size
+                    if  (NvisitedLegs[i]>maxLoopSize){
+                        cout << SSEXID << ": Extremely large loop" << endl;
+                        return 1;
+                    }          
+                         
             } while  (j !=j0);                          //Another way to close the loop
         }    
     }
@@ -410,7 +500,8 @@ int SSEXY::MCstep()
                     spins[k]->at(j) = LegSpin[VTX[p]-1][leg]; //Use the leg/operator-type -> spin-type map
                 }
             }
-     }//Spins loop 
+     }//Spins loop
+     return 0; 
 }
 
 //#################################################################
@@ -538,6 +629,7 @@ int main(int argc, char *argv[])
             ("height,y",     po::value<int>()->default_value(1),"lattice height")
             ("process_id,p", po::value<int>()->default_value(0),"process id")
             ("replica,r",    po::value<int>()->default_value(1),"number of replicas")
+            ("measn,m",      po::value<long>(),"number of measurements to take")
             ("state,s",      po::value<string>()->default_value(""),"path to the state file")
             ("region_A,a",   po::value<string>()->default_value(""),"path to the file defining region A");
     po::store(po::parse_command_line(argc, argv, cmdLineOptions), params);
@@ -550,6 +642,11 @@ int main(int argc, char *argv[])
     
     if  ((params["temperature"].as<double>() != -1) && (params["beta"].as<double>() != -1)){
         cerr << "Error: simultanious definition of temperature via T and beta parameters" << endl;
+        return 1; 
+    }
+    
+    if  (!(params.count("measn"))){
+        cerr << "Error: define the number of measurements to take" << endl;
         return 1; 
     }
     
@@ -589,8 +686,20 @@ int main(int argc, char *argv[])
 
     SSEXY ssexy(params["replica"].as<int>(), params["width"].as<int>(),
                 params["height"].as<int>(),  params["temperature"].as<double>(), 
-                params["beta"].as<double>(),5, &Aregion);  
-    for (int i=0; i!=20055000; i++){
+                params["beta"].as<double>(),params["process_id"].as<int>(), &Aregion, params["state"].as<string>());  
+    cout << endl << "Equilibration stage" << endl << endl;
+    
+    int NoAdjust;
+    NoAdjust=0;
+    for (int i=0; i!=500; i++){
+        if  (ssexy.AdjustParameters() == 0) NoAdjust += 1;
+        else NoAdjust = 0;
+        
+        if (NoAdjust == 10) break;
+    }
+        
+    cout << endl << "Measurement stage" << endl << endl;
+    for (long i=0; i!=100*params["measn"].as<long>(); i++){
         ssexy.MCstep();
         ssexy.Measure();
     }

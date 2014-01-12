@@ -11,14 +11,19 @@ class SSEXY: public RandomBase{
 
 
     private:
+        //Algorithmic parameters
+        int  Nloops;
+        int  binSize;
+        long maxLoopSize;
+
+        //Physical parameters
         int r; // order of Renyi entropy
-        int Nloops;
-        int binSize;
         int Nx;
         int Ny;
         int N;
         float Beta;
         float T;
+
         vector<vector<long>> sites;
         vector<long> ap;
         vector<Replica*> Replicas; 
@@ -33,16 +38,21 @@ class SSEXY: public RandomBase{
         vector<long> ns;
         vector<long> Tns;
         
-        vector<long> NvisitedLegs;  //Number of visited legs per MC step
+        vector<long> NvisitedLegs;   //Number of visited legs per MC step
+        vector<long> TNvisitedLegs;  //Accumulated number of visited legs per MC step
         vector<long> LINK; 
         vector<long> VTX; 
 
         long LegSpin[6][4];
         long nTotal;
         long nMeas;
+        long saveFreq;
+        long nSaved; 
         bool Debug;
+
         //File management
         Communicator communicator;
+        long SSEXID;
 
         long Bounce(long enLeg);
         long ContinueStraight(long enLeg);
@@ -51,8 +61,11 @@ class SSEXY: public RandomBase{
         pair<long,long> SwitchLeg(long leg, long vtype);
 
     public:
-       SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, vector<long>* _Aregion); 
+       SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, vector<long>* _Aregion, string rfName); 
+       int  AdjustParameters();
        int  MCstep(); 
-       int Measure(); 
+       int  Measure(); 
+       int  SaveState();
+       int  LoadState();
 };
 #endif
