@@ -24,7 +24,8 @@ private:
     vector <long> ap;                     //Propagated spins state
 
     //Algorithmic variables
-    long ESteps;                 //Number of equilibration steps    
+    int  id;                    
+    long ESteps;                //Number of equilibration steps    
     long estep;
     long M;                     //Operators list size
     long n;                     //Non-I operators list size
@@ -45,7 +46,7 @@ private:
 
 public:
 
-    Replica(unsigned short _Nx, unsigned short _Ny, float _T, long seed);
+    Replica(unsigned short _Nx, unsigned short _Ny, float _T, long seed, int _id);
     long DiagonalMove();
 
     void Equilibrate();
@@ -60,5 +61,9 @@ public:
     vector<long>* getSpin()  {return &spins;}
     vector<long>* getOper()  {return &sm;}
     long          getn()     {return n;}
+    long          getM()     {return M;}
+    void          setn(long _n) {n=_n;}
+    void          setM(long _M) {M=_M;}
+    void          setSpinAt(long i, long n){spins[i]=n;}
 };
 #endif

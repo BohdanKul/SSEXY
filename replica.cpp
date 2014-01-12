@@ -14,7 +14,7 @@ using namespace std;
 /**************************************************************
 *  Constructor 
 **************************************************************/
-Replica::Replica(unsigned short _Nx, unsigned short _Ny, float _T, long seed):
+Replica::Replica(unsigned short _Nx, unsigned short _Ny, float _T, long seed, int _id):
 //Initialize random objects with default values
  RandomBase(seed)
 
@@ -29,7 +29,6 @@ Replica::Replica(unsigned short _Nx, unsigned short _Ny, float _T, long seed):
     N      = Nx*Ny;
     T    = _T;
     Beta = 1.0/T;
-    cout << "Beta = " << Beta << endl;
 
     //Initialize bonds
     if (Ny>1) NBonds = 2*N;
@@ -42,18 +41,18 @@ Replica::Replica(unsigned short _Nx, unsigned short _Ny, float _T, long seed):
     spins.resize(N,0);
     for (vector<long>::iterator spin=spins.begin(); spin!=spins.end(); spin++) {
         *spin = pow(-1,uRandInt()%2);
-        //cout << *spin << " ";
     }
 
     first.resize(N,-1);
     last.resize(N,-1);
 
     //Initialize operator list
-    M = round(((float) NBonds) *Beta*1.5);
+    M = round(((float) NBonds) *Beta);
     n = 0;
     sm.resize(M,0);  
 
     //Initialize algorithmic variables
+    id = _id;
     ESteps  = 10000000;              
     estep = 1000;
     Debug = false;
@@ -63,6 +62,7 @@ Replica::Replica(unsigned short _Nx, unsigned short _Ny, float _T, long seed):
 
 void Replica::AdjustM(){
            M = M+7*long(sqrt(n));
+           cout << id << ": Adjusting M to "<< M << endl;
            sm.resize(M,0); 
         }
 
@@ -80,7 +80,7 @@ void Replica::Equilibrate(){
     long CumvLegs = 0;        //Cummulative number of visited legs  
     float E = 0;              //Average energy  
 
-    //Spind stiffness variables
+    //Spin stiffness variables
     long WNx  = 0;            //Number of off-diagonal shifts in x-direction 
     long WNy  = 0;            //Number of off-diagonal shifts in y-direction 
     long b      = 0;          //Bond index
@@ -155,9 +155,7 @@ Below, the left bottom site initiates 2 bonds:
                  sites[b+1][0] = y*Nx+x;
                  sites[b+1][1] = ((y+1)%Ny)*Nx+x;
                  b += 2;
-             //    cout << site2[b]<< " ";
              }
-             //cout << endl;
          } 
     }
     else                                           //A 1-d chain
@@ -189,11 +187,9 @@ long Replica::DiagonalMove()
             AccP = ((float) NBonds)*Beta*BondDiagonalEnergy(b) / ((float) (M-n));     //Acceptance probability
             uRan =  uRand();
             if (uRan<AccP){
-                //cout << "I -> D. Operator = " << *oper << endl;
                *oper = 2*b;
                n += 1;               //Update the current operator list length                                         
                if (((float) M/n)<1.25){       //If it is too close to the max (M), halt the move 
-                   cout << "M/n = " << (float) M/n << " < " << 1.25 << endl;
                    return 1;   
                }
             }   
@@ -203,7 +199,6 @@ long Replica::DiagonalMove()
             b = (long)(*oper/2);                                   //Bond to be removed
             AccP = ((float) M-n+1)/(((float) NBonds)*Beta*BondDiagonalEnergy(b));  //Acceptance probability
             if (uRand()<AccP){
-               //cout << "D -> I. Operator = " << *oper  <<endl;
                *oper = 0;
                n -= 1;  
             }
@@ -230,7 +225,6 @@ long Replica::VertexType(long oper)
     long b = (long)((oper-oper%2)/2);    //Determine operator's bond based on operator's value
     long s0 = ap[sites[b][0]];  
     long s1 = ap[sites[b][1]];
-    //cout << oper << endl;
     if  (oper%2 == 0){
         if  ((s0 ==-1) and (s1 ==-1))
             return 1;
