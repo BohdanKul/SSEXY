@@ -91,9 +91,7 @@ def main():
     parser.add_argument('fileNames', help='Scalar estimator files', nargs='+')
     parser.add_argument('--estimator','-e', help='A list of estimator names that \
                         are to be plotted.', type=str)
-    parser.add_argument('--fro','-f', help='First measurement of interest \
-                        in the average plot.', type=int, default=0)
-    parser.add_argument('--to','-t', help='Last measurement of interest \
+    parser.add_argument('--skip','-s', help='Number of measurements to be skipped \
                         in the average plot.', type=int, default=0)
     parser.add_argument('--period','-p', help='Period of the simple moving \
                         average. default=50', type=int, default=50)
@@ -124,6 +122,7 @@ def main():
         parser.error(errorString)
 
 
+
     numFiles = len(fileNames)
 
     colors  = loadgmt.getColorList('cw/1','cw1-029',max(numFiles,2))
@@ -142,16 +141,25 @@ def main():
             params = GetFileParams(fileName)
             col    = GetHeaderNumber(fileName,args.estimator)
             data = loadtxt(fileName,usecols=col)
-            if  (args.to == 0):
-                args.to = len(data)-1
+            extra = 'one replica'
+            ls = ":"
+            if fileName.find('200000000') != -1:
+               data *= 0.5   
+               extra = "connected"
+               ls = "-"
+            if fileName.find('300000000') != -1:
+               data *= 0.5   
+               extra = "disconnected (*0.5)" 
+               ls = "--"
             ID = fileName[-14:-4]
             if size(data) > 1:
-                sma = simpleMovingAverage(args.period,data[args.fro:args.to])
-                ax.plot(sma,color=colors[i],linewidth=3,linestyle='--',label=r'$T = %s$' %(params['T']))
-                bins = MCstat.bin(data[args.fro:args.to]) 
+                sma = simpleMovingAverage(args.period,data[args.skip:])
+                ax.plot(sma,color=colors[i],linewidth=3,linestyle=ls,label=r'$T = %s$; %s' %(params['T'],extra))
+                #ax.plot([0,len(sma)],[ref[i],ref[i]],color=colors[i],linewidth=1,marker='None',linestyle='-')
+                bins = MCstat.bin(data) 
                 dataErr = amax(bins,axis=0)
-                dataAve = average(data[args.fro:args.to])
-                print 'T= %s %0.6f +/- %0.6f' %(params['T'],dataAve,dataErr)
+                dataAve = average(data)
+                print 'T= %s %0.6f +/- %0.6f (%s)' %(params['T'],dataAve,dataErr,extra)
 
         else:
             print '%s contains no measurements' %fileName
