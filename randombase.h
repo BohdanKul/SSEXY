@@ -12,8 +12,8 @@ class RandomBase {
     public:
         //Define data-types of random objects 
         typedef boost::mt19937 t_eng;                 //Mersenne twister
-        typedef boost::uniform_real<float> t_uReal;   //Uniform real distribution
-        typedef boost::uniform_int<int>    t_uInt;    //Uniform longeger distribution
+        typedef boost::uniform_real<float>   t_uReal;   //Uniform real distribution
+        typedef boost::uniform_int<uint64_t> t_uInt;    //Uniform longeger distribution
 
         //Random generation objects
         t_eng   eng;                 //Mersenne twister
