@@ -21,7 +21,7 @@ Communicator::Communicator(int _Nx, int _Ny, float _T, float _Beta, long _p, str
         GenerateId();
     else{
         boost::filesystem::path filePath(rfName);
-        id = atol(filePath.leaf().string().substr(21,9).c_str());
+        id = atol(string(filePath.filename()).substr(21,9).c_str());
         }
     dataName = boost::str(boost::format("%03d-%03d-%06.3f") %_Nx %_Ny %_T);
     string  fileName;
