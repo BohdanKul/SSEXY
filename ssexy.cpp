@@ -17,7 +17,7 @@ namespace po = boost::program_options;
 
 //**************************************************************************
 SSEXY::SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, vector<long>* _Aregion, string frName):
-communicator(_Nx,_Ny,_T,_Beta,seed,frName), RandomBase(seed)
+communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName), RandomBase(seed)
 {
     long tmp[6][4] = {  {-1,-1,-1,-1},
                         { 1, 1, 1, 1},
