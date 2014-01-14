@@ -84,11 +84,11 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName), RandomBase(seed)
     
     //Write headers for a new estimator file
     if (frName==""){
-        string eHeader = boost::str(boost::format("#%15s%16s%16s%16s%16s%16s")%"nT"%"dnT"%"ET"%"dET"%"Legs"%"dLegs");
+        string eHeader = boost::str(boost::format("#%15s%16s%16s")%"nT"%"ET"%"Legs");
         *communicator.stream("estimator") << eHeader;    
         if  (r>1)
             for (int j=0; j!=r; j++){
-                string eHeader = boost::str(boost::format("%15s%i%15s%i%15s%i%15s%i") %"n"%(j+1)%"dn"%(j+1)%"E"%(j+1)%"dE"%(j+1));
+                string eHeader = boost::str(boost::format("%15s%i%15s%i") %"n"%(j+1)%"E"%(j+1));
                 *communicator.stream("estimator") << eHeader;    
             }
         *communicator.stream("estimator") << endl;    
@@ -147,19 +147,19 @@ int SSEXY::Measure()
     if  (nMeas == binSize){
         //Record total Energy
         E = -((float) Tns[r]/((float) binSize*N))/Beta + r*1.0;   //r*1.0 term represents the added energy offset per bond
-        *communicator.stream("estimator") << boost::str(boost::format("%16.8E%16.8E%16.8E%16.8E") %(Tns[r]/(1.0*binSize)) %0.0 %E %0.0);
+        *communicator.stream("estimator") << boost::str(boost::format("%16.8E%16.8E") %(Tns[r]/(1.0*binSize)) %E);
         
         //Record loop data
         for (int j=0; j!=Nloops; j++)
             TNLegs += TNvisitedLegs[j];
-        *communicator.stream("estimator") << boost::str(boost::format("%16.8E%16.8E") %(TNLegs*1.0/(1.0*binSize)) %0.0);
+        *communicator.stream("estimator") << boost::str(boost::format("%16.8E") %(TNLegs*1.0/(1.0*binSize)));
 
         //Record energy of each replica
         if  (r>1)         
         
             for (int j=0; j!=r; j++){
                 E = -((float) Tns[j]/((float) binSize*N))/Beta + 1.0;
-                *communicator.stream("estimator") << boost::str(boost::format("%16.8E%16.8E%16.8E%16.8E") %(Tns[j]/(1.0*binSize)) %0.0 %E %0.0);
+                *communicator.stream("estimator") << boost::str(boost::format("%16.8E%16.8E") %(Tns[j]/(1.0*binSize)) %E);
             }
         *communicator.stream("estimator") << endl;    
 
