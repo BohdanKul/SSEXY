@@ -8,22 +8,31 @@
 using namespace std;
 //using boost::lexical_cast;
 
-Communicator::Communicator(int _Nx, int _Ny, float _T, float _Beta, long _p, string rfName)
+Communicator::Communicator(int _Nx, int _Ny, int _r, float _T, float _Beta, long _p, string rfName)
 {
     p = _p;
+    
     //Define temperature in one of two ways
-    cout << "communcator" << endl;
-    if (_T == -1)
+    string Tdef;
+    if (_T == -1){
         _T = 1.0/(1.0*_Beta);
+        Tdef = 'b';
+    }
+    else Tdef = 't';
+    
+
     types  = vector<string> {"state","estimator"};
     outDir = "OUTPUT"; 
+    dataName = boost::str(boost::format("%02d-%03d-%03d-%s%06.3f") %_r %_Nx %_Ny %Tdef %_T);
+    
+    //Generate or fetch the id
     if  (rfName=="") 
         GenerateId();
     else{
-        boost::filesystem::path filePath(rfName);
-        id = atol(string(filePath.filename()).substr(21,9).c_str());
+        string fileName = string(find( rfName.rbegin(), rfName.rend(), '/').base(), rfName.end());
+        id = atol(fileName.substr(25,9).c_str());
         }
-    dataName = boost::str(boost::format("%03d-%03d-%06.3f") %_Nx %_Ny %_T);
+
     string  fileName;
     for (vector<string>::iterator type=types.begin(); type!=types.end(); type++){
         fileName = boost::str(boost::format("%s/%s-%s-%09d.dat") %outDir %*type %dataName %id);
