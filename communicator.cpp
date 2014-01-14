@@ -13,17 +13,15 @@ Communicator::Communicator(int _Nx, int _Ny, int _r, float _T, float _Beta, long
     p = _p;
     
     //Define temperature in one of two ways
-    string Tdef;
     if (_T == -1){
         _T = 1.0/(1.0*_Beta);
-        Tdef = 'b';
+         dataName = boost::str(boost::format("%02d-%03d-%03d-%s%06.3f") %_r %_Nx %_Ny %"b" %_Beta);
     }
-    else Tdef = 't';
+    else dataName = boost::str(boost::format("%02d-%03d-%03d-%s%06.3f") %_r %_Nx %_Ny %"t" %_T);
     
 
     types  = vector<string> {"state","estimator"};
     outDir = "OUTPUT"; 
-    dataName = boost::str(boost::format("%02d-%03d-%03d-%s%06.3f") %_r %_Nx %_Ny %Tdef %_T);
     
     //Generate or fetch the id
     if  (rfName=="") 
