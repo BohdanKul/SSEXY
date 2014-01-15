@@ -87,7 +87,8 @@ def main():
     parMap = {'x': r'L_x',
               'y': r'L_y',
               'b': r'\beta',
-              'T': r'T'}
+              'T': r'T',
+              'r': r'r'}
 
 
     parser = OptionParser() 
@@ -111,7 +112,6 @@ def main():
     parser.set_defaults(plot=False)
     parser.set_defaults(skip=0)
     (options, args) = parser.parse_args() 
-
     if (not options.reduce):
         parser.error("need a correct reduce flag (-r,--reduce): [r,x,y,T,b]")
     # parse the command line options and get the reduce flag
@@ -128,13 +128,18 @@ def main():
 
     # We first reduce the scalar estimators and output them to disk
     head1,scAve1,scErr1 = getScalarEst('estimator',ssexy,outName,options.reduce)
-
     if options.plot:
         rcParams.update(mplrc.aps['params'])
         # Get the changing parameter that we are plotting against
         param = []
         for ID in ssexy.id:
             param.append(float(ssexy.params[ID][options.reduce]))
+        lab = ''
+        options_dic = vars(options)
+        for item in ['x','y','r','T','B']:
+            if options_dic[item]:
+               lab += r'%s=%s \,' %(parMap[item],options_dic[item])
+
         colors = ["#66CAAE", "#CF6BDD", "#E27844", "#7ACF57", "#92A1D6", "#E17597", "#C1B546",'b']
 
         figure(1,(8,6))
@@ -142,9 +147,10 @@ def main():
         ax = subplot(111)
         errorbar(param, scAve1[:,1], yerr=scErr1[:,1],\
                 marker='s',mec=colors[1],mfc=colors[1],\
-                ms=8,ls='None',capsize=4)
+                ls='None',capsize=4,label=r'$\mathrm{}%s$' %lab)
         xlabel(r'$\mathrm{%s}$' %parMap[options.reduce])
         ylabel(r'$\mathrm{E}$')
+        legend(loc='best',frameon=False)
         tight_layout()
         show()
 
