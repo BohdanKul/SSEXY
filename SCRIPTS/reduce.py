@@ -84,10 +84,10 @@ def getScalarEst(type,ssexy,outName,reduceFlag, skip=0):
 def main():
 
     # define the mapping between short names and label names 
-    shortFlags = ['n','T','N','t','u','V','L']
-    parMap = {'n':'Initial Density', 'T':'Temperature', 'N':'Initial Number Particles',
-              't':'Imaginary Time Step', 'u':'Chemical Potential', 'V':'Container Volume',
-              'L':'Container Length'}
+    parMap = {'x': r'L_x',
+              'y': r'L_y',
+              'b': r'\beta',
+              'T': r'T'}
 
 
     parser = OptionParser() 
@@ -122,7 +122,9 @@ def main():
     
     ssexy = ssexyhelp.SSEXYHelp(options)
     ssexy.getSimulationParameters()
-
+    if  (not ssexy.id): 
+        print "No filenames detected satisfying those criteria"
+        sys.exit()
 
     # We first reduce the scalar estimators and output them to disk
     head1,scAve1,scErr1 = getScalarEst('estimator',ssexy,outName,options.reduce)
@@ -132,15 +134,17 @@ def main():
         # Get the changing parameter that we are plotting against
         param = []
         for ID in ssexy.id:
-            param.append(float(ssexy.params[ID][reduceFlag[1]]))
+            param.append(float(ssexy.params[ID][options.reduce]))
         colors = ["#66CAAE", "#CF6BDD", "#E27844", "#7ACF57", "#92A1D6", "#E17597", "#C1B546",'b']
 
         figure(1,(8,6))
         connect('key_press_event',kevent.press)
         ax = subplot(111)
-        xlabel(r'$\mathrm{L[\AA]}$')
-        ylabel(r'$\mathrm{\rho_s/ \rho_{c}}$')
-        legend(loc='best',frameon=False)
+        errorbar(param, scAve1[:,1], yerr=scErr1[:,1],\
+                marker='s',mec=colors[1],mfc=colors[1],\
+                ms=8,ls='None',capsize=4)
+        xlabel(r'$\mathrm{%s}$' %parMap[options.reduce])
+        ylabel(r'$\mathrm{E}$')
         tight_layout()
         show()
 
