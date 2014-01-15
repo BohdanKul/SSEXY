@@ -9,7 +9,7 @@ import sys
 import kevent
 
 class Annotate(object):
-    def __init__(self,Nx,Ny,ofname,sfname):
+    def __init__(self,Nx,Ny,ofname,sfname,filled):
         self.colors = ["#66CAAE", "#CF6BDD", "#E27844", "#7ACF57", "#92A1D6", "#E17597", "#C1B546"]
         if  ofname:
             print "Loading from file: ", ofname
@@ -17,8 +17,9 @@ class Annotate(object):
             (self.Ny, self.Nx) =self.State.shape  
         else:
             (self.Nx, self.Ny) = (Nx,Ny)
-            self.State = np.zeros((self.Ny,self.Nx),dtype=bool) 
-        
+            if not(filled):   self.State = np.zeros((self.Ny,self.Nx),dtype=bool) 
+            else:             self.State = np.ones((self.Ny,self.Nx),dtype=bool) 
+
         (self.ofname,self.sfname) = (ofname,sfname)
         (self.xlim, self.ylim)    = (1,1)
         (self.width, self.height) = (self.xlim/float(self.Nx),self.ylim/float(self.Ny))
@@ -29,10 +30,14 @@ class Annotate(object):
         
         self.Drag   = False
         self.start=0;
-        self.rect =Rectangle((0,0), self.xlim, self.ylim,alpha=0.1)
-        self.Rects = np.zeros((self.Ny,self.Nx),dtype=Rectangle)
+
+        self.rect  = Rectangle((0,0), self.xlim, self.ylim,alpha=0.1)
+        if filled: self.Rects = np.ones((self.Ny,self.Nx),dtype=Rectangle)
+        else:      self.Rects = np.zeros((self.Ny,self.Nx),dtype=Rectangle)
+        
         self.rColors = {False: dict(facecolor="white"), 
                         True:  dict(facecolor=self.colors[1])}
+
         self.DrawState()
         self.ax.figure.canvas.draw()
 
@@ -49,12 +54,9 @@ class Annotate(object):
                 for j in range(self.Nx):
                     if  self.State[i,j]:
                         footer += str(j+i*self.Nx)+" "
-            if self.sfname:
+            if (self.ofname or self.sfname):
                 np.savetxt(self.sfname, self.State, fmt="%i",header="Nx=%i\nNy=%i\n" %(self.Nx,self.Ny),footer=footer) 
                 print "State saved to: ", self.sfname
-            elif self.ofname:
-                np.savetxt(self.ofname, self.State, fmt="%i") 
-                print "State saved to: ", self.ofname
             else:
                 print "No storage file specified"
 
@@ -116,15 +118,17 @@ class Annotate(object):
 # setup the command line parser options 
 parser = argparse.ArgumentParser(description='Graphical editor A region')
 parser.add_argument('--config','-c', help='Path to region A config file',type=str)
-parser.add_argument('--save','-n',help='New config file name', type=str)
+parser.add_argument('--save', '-n',help='New config file name', type=str)
+parser.add_argument('--filled','-f',help='Should initial lattice state be filled', action="store_true")
 parser.add_argument('--Lx',  '-x',help='Lattice width', type=int)
 parser.add_argument('--Ly',  '-y',help='Lattice height',type=int)
+parser.set_defaults(filled = False)
 args = parser.parse_args()
 
 if  (not(args.config)) and ((not(args.Lx)) or (not(args.Ly))):
     print "Specify lattice dimensions via Lx and Ly parameters or a config file"
     sys.exit(0) 
 
-a = Annotate(args.Lx, args.Ly, args.config, args.save)
+a = Annotate(args.Lx, args.Ly, args.config, args.save, args.filled)
 plt.tight_layout()
 plt.show()
