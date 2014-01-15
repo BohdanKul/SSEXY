@@ -15,6 +15,7 @@ class SSEXY: public RandomBase{
         int  Nloops;
         int  binSize;
         long maxLoopSize;
+        bool measSS;
 
         //Physical parameters
         int r; // order of Renyi entropy
@@ -24,19 +25,21 @@ class SSEXY: public RandomBase{
         float Beta;
         float T;
 
-        vector<vector<long>> sites;
-        vector<long> ap;
         vector<Replica*> Replicas; 
-        vector<long>  Aregion;
+        vector<vector<long>> sites;
         vector<vector<long>*> firsts ;
         vector<vector<long>*> lasts  ;
         vector<vector<long>*> links  ;
         vector<vector<long>*> spins  ;
         vector<vector<long>*> vtxs   ;
         vector<vector<long>*> sms    ;
+        
+        vector<long> ap;
+        vector<long>  Aregion;
         vector<long> shifts;
         vector<long> ns;
         vector<long> Tns;
+        float SpinStiffness;
         
         vector<long> NvisitedLegs;   //Number of visited legs per MC step
         vector<long> TNvisitedLegs;  //Accumulated number of visited legs per MC step
@@ -61,7 +64,7 @@ class SSEXY: public RandomBase{
         pair<long,long> SwitchLeg(long leg, long vtype);
 
     public:
-       SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, vector<long>* _Aregion, string rfName); 
+       SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, bool _measSS, string rfName, vector<long>* _Aregion); 
        int  AdjustParameters();
        int  MCstep(); 
        int  Measure(); 

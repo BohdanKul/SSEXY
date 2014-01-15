@@ -16,7 +16,7 @@ namespace po = boost::program_options;
 
 
 //**************************************************************************
-SSEXY::SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, vector<long>* _Aregion, string frName):
+SSEXY:: SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, bool _measSS, string frName, vector<long>* _Aregion): 
 communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName), RandomBase(seed)
 {
     long tmp[6][4] = {  {-1,-1,-1,-1},
@@ -54,13 +54,15 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName), RandomBase(seed)
     //Load replicas' datastructures if needed
     if (frName!="") LoadState();
     
-    Debug    = false;
-    Nloops   = 1;    
-    nMeas    = 0;
-    binSize  = 100;
-    saveFreq = 1; 
-    nSaved   = 0;
-    maxLoopSize = 2400000;
+    Debug         = false;
+    Nloops        = 1;    
+    nMeas         = 0;
+    binSize       = 100;
+    saveFreq      = 1; 
+    nSaved        = 0;
+    maxLoopSize   = 2400000;
+    SpinStiffness = 0;
+    measSS        = _measSS;
 
     // Initialize data structures
     firsts.resize(r,NULL);
@@ -75,20 +77,22 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName), RandomBase(seed)
     TNvisitedLegs.resize(Nloops,0);
     Tns.resize(r+1,0);              //+1 is for the totals
     
-    //Debugging data structues
-
-    sites = Replicas[0]->getSites();
 
     // Initialize region A
     Aregion = *_Aregion; 
     
     //Write headers for a new estimator file
+    string eHeader;
     if (frName==""){
-        string eHeader = boost::str(boost::format("#%15s%16s%16s")%"nT"%"ET"%"Legs");
+        if (measSS) eHeader = boost::str(boost::format("#%15s%16s%16s%16s")%"nT"%"ET"%"Legs"%"SS");
+        else        eHeader = boost::str(boost::format("#%15s%16s%16s")%"nT"%"ET"%"Legs");
         *communicator.stream("estimator") << eHeader;    
+
+
+
         if  (r>1)
             for (int j=0; j!=r; j++){
-                string eHeader = boost::str(boost::format("%15s%i%15s%i") %"n"%(j+1)%"E"%(j+1));
+                eHeader = boost::str(boost::format("%15s%i%15s%i") %"n"%(j+1)%"E"%(j+1));
                 *communicator.stream("estimator") << eHeader;    
             }
         *communicator.stream("estimator") << endl;    
@@ -141,6 +145,11 @@ int SSEXY::Measure()
     for (int j=0; j!=Nloops; j++)
         TNvisitedLegs[j] += NvisitedLegs[j];
 
+    //If spin stiffness estimator is turned on
+    //accumulate it
+    if (measSS)
+       SpinStiffness += Replicas[0]->MeasureSpinStiffness(); 
+    
     // If we've collected enough of measurements
     float E;
     long  TNLegs = 0;
@@ -161,6 +170,15 @@ int SSEXY::Measure()
                 E = -((float) Tns[j]/((float) binSize*N))/Beta + 1.0;
                 *communicator.stream("estimator") << boost::str(boost::format("%16.8E%16.8E") %(Tns[j]/(1.0*binSize)) %E);
             }
+
+        //Record spin stiffness if needed
+        if (measSS){
+           *communicator.stream("estimator") << boost::str(boost::format("%16.8E") %(SpinStiffness/(1.0*binSize)));
+           SpinStiffness = 0;
+        }
+
+ 
+        //Carry to a new line
         *communicator.stream("estimator") << endl;    
 
         //Set accumulating variables to 0
@@ -630,6 +648,7 @@ int main(int argc, char *argv[])
             ("process_id,p", po::value<int>()->default_value(0),"process id")
             ("replica,r",    po::value<int>()->default_value(1),"number of replicas")
             ("measn,m",      po::value<long>(),"number of measurements to take")
+            ("super,w",      po::value<bool>()->default_value(false),"Turn on the spin stifness measurement. (r must be set to 1)")
             ("state,s",      po::value<string>()->default_value(""),"path to the state file")
             ("region_A,a",   po::value<string>()->default_value(""),"path to the file defining region A");
     po::store(po::parse_command_line(argc, argv, cmdLineOptions), params);
@@ -639,6 +658,11 @@ int main(int argc, char *argv[])
        cout << cmdLineOptions << "\n";
        return 1;
     } 
+    
+    if  ((params["super"].as<bool>()) && (params["replica"].as<int>() != 1)){
+        cerr << "Error: cannot measure spin stiffness for a multiple replicas simulation" << endl;
+        return 1; 
+    }
     
     if  ((params["temperature"].as<double>() != -1) && (params["beta"].as<double>() != -1)){
         cerr << "Error: simultanious definition of temperature via T and beta parameters" << endl;
@@ -686,7 +710,10 @@ int main(int argc, char *argv[])
 
     SSEXY ssexy(params["replica"].as<int>(), params["width"].as<int>(),
                 params["height"].as<int>(),  params["temperature"].as<double>(), 
-                params["beta"].as<double>(),params["process_id"].as<int>(), &Aregion, params["state"].as<string>());  
+                params["beta"].as<double>(), params["process_id"].as<int>(), 
+                params["super"].as<bool>(),  params["state"].as<string>(),
+                &Aregion);  
+
     cout << endl << "Equilibration stage" << endl << endl;
     
     int NoAdjust;
