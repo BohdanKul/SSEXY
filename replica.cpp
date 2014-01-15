@@ -60,75 +60,62 @@ Replica::Replica(unsigned short _Nx, unsigned short _Ny, float _T, long seed, in
 }
 
 
+/**************************************************************
+* Increase the length of the operator list 
+**************************************************************/
 void Replica::AdjustM(){
            M = M+7*long(sqrt(n));
            cout << id << ": Adjusting M to "<< M << endl;
            sm.resize(M,0); 
         }
 
+
 /**************************************************************
-* Equilibration. Parameters adjustment 
+* Measure Spin Stiffness 
 **************************************************************/
-void Replica::Equilibrate(){
-
-    long i;
-    long  totalvLegs = 0;     //Average number of visited legs
-    long Cumn = 0;            //Cummulative number of non-identity operators  
-    long CumM = 0;            //Cummulative magnetization  
-    long totalMagn = 0;       //Average magnetication  
-    long CumMagn  = 0;        //Cummulative magnetization  
-    long CumvLegs = 0;        //Cummulative number of visited legs  
-    float E = 0;              //Average energy  
-
+float Replica::MeasureSpinStiffness(){
     //Spin stiffness variables
     long WNx  = 0;            //Number of off-diagonal shifts in x-direction 
     long WNy  = 0;            //Number of off-diagonal shifts in y-direction 
-    long b      = 0;          //Bond index
-    long shift  = 1;          //Takes only 2 values: +1 or -1 depending on an off-diaogonal operator
-    long CumSS  = 0;          //Cummulative spin stiffness
+    long b    = 0;
+    int shift = 0;
 
-    //Main loop
-    for (long step=0; step<ESteps; step++){
-        Cumn += n;
-        CumM += M;
+    //Compute Winding numbers
+    WNx = 0;
+    WNy = 0;
+    ap = spins;               //Reinitiate propagated spins state                 
+    for (vector<long>::iterator oper=sm.begin(); oper!=sm.end(); oper++){
+        if  ((*oper)%2==1){
+            //Determine whether the winding number 
+            //needs to be increased or decreased
+            if  (VertexType(*oper) == 5) shift = -1;
+            else                         shift = +1;
 
-       
-        //Compute Magnetization   
-        totalMagn = 0;
-        for (vector<long>::iterator cspin = spins.begin(); cspin != spins.end(); cspin++)
-            totalMagn += *cspin;
-        CumMagn += totalMagn;
-
-        Debug = false;
-        //Compute Winding numbers
-        WNx = 0;
-        WNy = 0;
-        ap = spins;                             //Reinitiate the propagated spins state                 
-        for (vector<long>::iterator oper=sm.begin(); oper!=sm.end(); oper++){
-            if  ((*oper)%2==1){
-                //Determine whether the winding number needs to be increased or decreased
-                if  (VertexType(*oper) == 5) shift = -1;
-                else                         shift = +1;
-                //Determine in what direction *oper operates and change corresponding WN
-                b = (long)((*oper-(*oper)%2)/2);                      //Operator's bond
-                if  (b%2) WNy += shift;
-                else      WNx += shift;
-                ap[sites[b][0]] = -ap[sites[b][0]];         //Update the propagated spins state
-                ap[sites[b][1]] = -ap[sites[b][1]]; 
-            }
-        } 
-        CumSS += long(WNx/Nx)*long(WNx/Nx) + long(WNy/Ny)*long(WNy/Ny);        
-
-        //Estimators output         
-        if (step%estep == 0){
-           E = -((float) Cumn/((float) estep*N))/Beta + (float) 1;
-           //cout << "n = " << setw(7) << (float) Cumn/((float) estep) << " E = " << setw(7) << E << " M = " << setw(9) << (float) CumM/estep << " Legs = " << setw(6) << (float) CumvLegs/estep << " Magnetization " << setw(6) << (float) CumMagn/estep << endl;
-           Cumn = CumM = CumvLegs = CumMagn = CumSS = 0;
-           }      
-
-         
-     }
+            //Determine in what direction *oper 
+            //operates and change corresponding WN
+            b = (long)((*oper-(*oper)%2)/2);       //Operator's bond
+            if  ((b%2) and (Ny >1)) WNy += shift;
+            else                    WNx += shift;
+            ap[sites[b][0]] = -ap[sites[b][0]];    //Update propagated spins state
+            ap[sites[b][1]] = -ap[sites[b][1]];    //Necessarily step to  correctly track
+                                                   //the type of an operator
+        }
+    } 
+    return (long(WNx/Nx)*long(WNx/Nx) + long(WNy/Ny)*long(WNy/Ny))/(2.0*Beta);        
 }
+
+ 
+/**************************************************************
+* Measure Spin Stiffness 
+**************************************************************/
+long Replica::MeasureMagnetization(){
+     long Magn = 0;
+     for (vector<long>::iterator cspin = spins.begin(); cspin != spins.end(); cspin++)
+         Magn += *cspin;
+
+     return Magn;
+}
+
 
 /***************************************************************
 * Building bonds structure via definition of spin they act upon 

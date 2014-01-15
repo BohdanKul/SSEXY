@@ -49,7 +49,9 @@ public:
     Replica(unsigned short _Nx, unsigned short _Ny, float _T, long seed, int _id);
     long DiagonalMove();
 
-    void Equilibrate();
+    long  MeasureMagnetization();
+    float MeasureSpinStiffness();
+
     void ConstructLinks();
     void AdjustM();
 
