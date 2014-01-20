@@ -26,6 +26,9 @@ Replica::Replica(unsigned short _Nx, unsigned short _Ny, float _T, long seed, in
     //Initialize variables
     Nx     = _Nx;
     Ny     = _Ny;
+    if (Ny>1) ndim = 2;
+    else      ndim = 1;
+
     N      = Nx*Ny;
     T    = _T;
     Beta = 1.0/T;
@@ -50,6 +53,9 @@ Replica::Replica(unsigned short _Nx, unsigned short _Ny, float _T, long seed, in
     M = round(((float) NBonds) *Beta);
     n = 0;
     sm.resize(M,0);  
+
+    //Initialize the spins partition 
+    spinPart.resize(N);
 
     //Initialize algorithmic variables
     id = _id;
@@ -132,8 +138,8 @@ Below, the left bottom site initiates 2 bonds:
 */
 {
     long b=1;                             //Bond index
-                                                   //Required to start from a value > 0 
-    if (Ny >1){                                    //A 2-d lattice
+                                                  //Required to start from a value > 0 
+    if (ndim==2){                                    //A 2-d lattice
          for (long y=0; y<Ny; y++){
              for (long x=0; x<Nx; x++){
                  //Define 2 bonds per site
@@ -153,6 +159,7 @@ Below, the left bottom site initiates 2 bonds:
              sites[b][1] = (x+1)%Nx;
              }
 }
+
 
 float Replica::BondDiagonalEnergy(long b){
       return (float) 0.5;
@@ -285,10 +292,134 @@ void Replica::ConstructLinks()
     }
 } 
 
+/**************************************************************
+* Yields indices of neighbouring spins for a given spin
+**************************************************************/
+void Replica::getSpinNeighs(long spin, vector<long>& sneighs){
+    
+    long x = spin % Nx;
+    long y = long(spin / Ny);
+    
+    if  (ndim==2){
+        //Down
+        if (y==0) sneighs[0] = x + (Ny-1)*Nx;   
+        else      sneighs[0] = x + (y -1)*Nx;
+
+        //Left
+        if (x==0) sneighs[1] = y*Nx + Nx-1;       
+        else      sneighs[1] = y*Nx + (x-1);      
+
+        //Up
+        sneighs[2] = x + (y+1)%Ny*Nx;  
+
+        //Right
+        sneighs[3] = y*Nx + (x+1)%Nx; 
+    }
+    else{
+        //Left
+        if (x==0) sneighs[1] = Nx-1;       
+        else      sneighs[1] = (x-1);      
+        
+        //Right
+        sneighs[1] = (x+1)%Nx;                      
+    }
+}
+
+/**************************************************************
+* Partition the spins according to the links loops they belong to  
+**************************************************************/
+long Replica::PartitionSpins(){
+     
+    long bond;              //Operator bond
+    long s0;                //Bond's first spin
+    long s1;                //Bonds second spin
+    long noLabel = -2;      //Label of a not yet partitioned spin
+    long oLabel;            //Old label of a partition we are about to relabel
+    long nLabel;            //New label of a partition we are about to relabel
+    long initSpin;          //Spin where the ralabelling process starts 
+    nfLoop = 0;             //The number of formed loops 
+    nLoop = 0;              //The number of formed distinct loops  
+    
+    
+    //Reinitiate the main data structure with the defaul value
+    fill(spinPart.begin(),spinPart.end(),noLabel);
+    
+    //Go through all operators, one a time, while assigning every 2 spins
+    //bonded by an operator to the same partition.
+    for (vector<long>::iterator oper=sm.begin(); oper!=sm.end(); oper++){
+        if  (*oper!=0){
+            //Determine the spins bonded by the operator 
+            bond = (long)(*oper/2);   
+            s0 = sites[bond][0];  
+            s1 = sites[bond][1];
+
+            //If those spins havent been labelled them,
+            //assign them to the same new partition
+            if  ((spinPart[s0] == noLabel) and (spinPart[s1] == noLabel)){
+                nfLoop += 1;
+                nLoop  += 1;
+                spinPart[s0] = nfLoop;
+                spinPart[s1] = nfLoop;
+            }
+
+            //If one of the spins is already partitioned, while the other one
+            //is still not, extend that partion to the unlabelled spin. 
+            else if  ((spinPart[s0] == noLabel) and (spinPart[s1] != noLabel)){
+                spinPart[s0] = spinPart[s1];
+            }
+            else if  ((spinPart[s0] != noLabel) and (spinPart[s1] == noLabel)){
+                spinPart[s1] = spinPart[s0];
+            }
+
+            //If both spins are already labelled, we have to relabel completly
+            //one of the partitions they belong to
+            else if (spinPart[s0] != spinPart[s1]){
+                nLoop -= 1;
+                //Partition with a greater label value gets relabelled
+                oLabel  = max(spinPart[s0],spinPart[s1]);
+                nLabel  = min(spinPart[s0],spinPart[s1]);
+                initSpin = (oLabel==spinPart[s0])*s0 + (oLabel==spinPart[s1])*s1;
+                RelabelLoop(initSpin,oLabel,nLabel);
+            }
+            //There is nothing to be done in the last possible case:
+            //else if (spinPart[s0] == spinPart[s1])
+        }
+    }
+   
+    //Now label spins that are not acted by operators. Each of them
+    //forms a new loop.
+    for (auto spin=spinPart.begin(); spin!=spinPart.end(); spin++)
+        if  (*spin==noLabel){
+            nfLoop += 1;
+            nLoop  += 1;
+            *spin   = nfLoop;
+        };
+
+    //Return the total number of formed loops 
+    return nfLoop;
+}
 
 
+/**************************************************************
+* Relabel recursively the spins partition that owns
+* initSpin from an old to a new value.
+**************************************************************/
+void Replica::RelabelLoop(long initSpin,long olabel,long nlabel){
+    
+    //First, relabel the orignial spin
+    spinPart[initSpin] = nlabel;
 
+    //Now, focus on its neighbours 
+    //Start by finding all of them    
+    vector<long> temp(2*ndim,-1);             //Just cause 
+    vector<long>& sneighs=temp;
 
-
-
-
+    getSpinNeighs(initSpin, sneighs);
+    
+    //Repeat the process recursively for those 
+    //that belong to the same partition
+    for (auto neigh=sneighs.begin(); neigh!=sneighs.end(); neigh++){
+        if  (spinPart[*neigh] == olabel)
+            RelabelLoop(*neigh,olabel,nlabel);
+    }
+} 

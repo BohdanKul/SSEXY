@@ -16,7 +16,7 @@ namespace po = boost::program_options;
 
 
 //**************************************************************************
-SSEXY:: SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, bool _measSS, string frName, vector<long>* _Aregion): 
+SSEXY:: SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, bool _measSS, bool _measRatio, string frName, vector<long>* _Aregion): 
 communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName), RandomBase(seed)
 {
     long tmp[6][4] = {  {-1,-1,-1,-1},
@@ -57,12 +57,17 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName), RandomBase(seed)
     Debug         = false;
     Nloops        = 1;    
     nMeas         = 0;
-    binSize       = 100;
+    binSize       = 1;
     saveFreq      = 1; 
     nSaved        = 0;
     maxLoopSize   = 2400000;
     SpinStiffness = 0;
+    ZRatio        = 0;
     measSS        = _measSS;
+    measRatio     = _measRatio;
+
+    if (measSS)    cout << "Measuring spin stiffness" << endl;
+    if (measRatio) cout << "Measuring Z ratio" << endl;
 
     // Initialize data structures
     firsts.resize(r,NULL);
@@ -78,16 +83,27 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName), RandomBase(seed)
     Tns.resize(r+1,0);              //+1 is for the totals
     
 
-    // Initialize region A
+    //Initialize region A
     Aregion = *_Aregion; 
-    
+   
+    //Initialize region A's extension.
+    //It is always 8 consecutif spins 
+    //following the largest index spin in A.
+    if  (measRatio){
+        Aextension.resize(8);
+        int maxSpin = *max_element(Aregion.begin(),Aregion.end());
+        for (int i=0; i!=8; i++)
+            Aextension[i] = maxSpin+1+i;
+    }
+            
+ 
     //Write headers for a new estimator file
     string eHeader;
     if (frName==""){
-        if (measSS) eHeader = boost::str(boost::format("#%15s%16s%16s%16s")%"nT"%"ET"%"Legs"%"SS");
-        else        eHeader = boost::str(boost::format("#%15s%16s%16s")%"nT"%"ET"%"Legs");
+        eHeader = boost::str(boost::format("#%15s%16s%16s")%"nT"%"ET"%"Legs");
+        if (measSS)    eHeader += boost::str(boost::format("%16s")%"SS");
+        if (measRatio) eHeader += boost::str(boost::format("%16s")%"ZRatio");
         *communicator.stream("estimator") << eHeader;    
-
 
 
         if  (r>1)
@@ -132,6 +148,92 @@ int SSEXY::AdjustParameters()
     }
 }
 
+
+/**************************************************************************
+*Measure the number of distinct loops existing between 2 partitions when
+*their boundary condition are taken into account. 
+***************************************************************************/
+long SSEXY::MeasureNLoop(vector<long>& BC, bool extension){
+
+    //Partition each replica's spins according to
+    //the loops they belong to
+    if (not extension){
+        Replicas[0]->PartitionSpins();  //value of the max loop number
+        Replicas[1]->PartitionSpins();
+    }
+    long mlabel0 = Replicas[0]->getnfLoops();  //value of the max loop number
+    long mlabel1 = Replicas[1]->getnfLoops();
+    long mlabel  = max(mlabel0,mlabel1)+1;         //form a loop label that has been
+                                                   //been observed in the replicas   
+                                                   //It is used ot signal whether the 
+                                                   //the spin has already been relabelled. 
+    long l0;   //loop label for replica 0 
+    long l1;   //loop label for replica 1 
+
+    //Total number of loops observed in both replicas
+    long nTLoop = Replicas[0]->getnLoops() + Replicas[1]->getnLoops();
+
+    //Connect replicas according to boundary conditions (BC),
+    //while keeping track of the new total number of loops.
+    for (auto spina=BC.begin(); spina!=BC.end(); spina++){
+        cout << "Extension: " << extension << " Spin:  " << *spina << " Loops #: " << nTLoop << endl;
+        //Based on the values of loops for a particular spin
+        //relabelling is different.
+        l0 = Replicas[0]->getPart()->at(*spina);
+        l1 = Replicas[1]->getPart()->at(*spina);
+        cout << "l0=" << l0 << " l1=" << l1 << " max=" << mlabel << endl;
+        //if l0 has already been relabelled but not l1, relabel l1
+        if ((l0>mlabel) and (l1<mlabel)){
+            if  (l0!= (l1+mlabel)){
+                Replicas[1]->RelabelLoop(*spina, l1, l1+mlabel);
+                nTLoop -= 1;
+            }
+        }
+        //if l1 has already been relabelled but not l0, relabel l0
+        else if ((l1>mlabel) and (l0<mlabel)){
+             if  (l1!=(l0+mlabel)){
+                 Replicas[0]->RelabelLoop(*spina, l0, l0+mlabel);
+                 nTLoop -= 1;
+            }
+        }
+        //if neither of them has been relabelled, relabel both of them
+        //to the new value derived from l0
+        else if ((l0<mlabel) and (l1<mlabel)){
+            Replicas[0]->RelabelLoop(*spina, l0, l0+mlabel);
+            Replicas[1]->RelabelLoop(*spina, l0, l0+mlabel);
+            nTLoop -= 1;
+        }
+        //if both of them have been relabelled, but they are not identical
+        //an error must have been occurred.
+        else
+            if  (l0 != l1)
+                cout << "Error: multiple replica relabelling fails at spin: " << *spina << endl;
+    }
+
+    return nTLoop;
+}        
+
+
+/**************************************************************************
+* Measure Z[Aregion]/Z[Aregion+Aextension], i.e. the ratio of modified part-
+*tion function connected at Aregion and the one connected at Aregion +
+*Aextension region. 
+***************************************************************************/
+float SSEXY::MeasureZRatio(){
+    //Measure the number of loops formed in each
+    //modified geometry.
+    //When we call MeasureNLoop for the 2nd time,
+    //all necessary structures are already computed.
+    //That is why we need a special boolean flag in 
+    //order to reduce the computational effort.
+    long AnLoops  = MeasureNLoop(Aregion, false);
+    long EAnLoops = MeasureNLoop(Aextension, true);
+    cout << "A region #: " << AnLoops << "; Extended region #: " << EAnLoops << endl;
+    return (1.0*AnLoops)/(1.0*EAnLoops);
+}
+        
+
+        
 //**************************************************************************
 int SSEXY::Measure()
 {
@@ -145,11 +247,15 @@ int SSEXY::Measure()
     for (int j=0; j!=Nloops; j++)
         TNvisitedLegs[j] += NvisitedLegs[j];
 
-    //If spin stiffness estimator is turned on
-    //accumulate it
+    //Accumulate the spin stiffness estimator
     if (measSS)
        SpinStiffness += Replicas[0]->MeasureSpinStiffness(); 
     
+
+    //Accumulate the partition function ratio estimator
+    if (measRatio)
+        ZRatio += MeasureZRatio();
+
     // If we've collected enough of measurements
     float E;
     long  TNLegs = 0;
@@ -163,7 +269,19 @@ int SSEXY::Measure()
             TNLegs += TNvisitedLegs[j];
         *communicator.stream("estimator") << boost::str(boost::format("%16.8E") %(TNLegs*1.0/(1.0*binSize)));
 
-        //Record energy of each replica
+        //Record spin stiffness if needed
+        if (measSS){
+           *communicator.stream("estimator") << boost::str(boost::format("%16.8E") %(SpinStiffness/(1.0*binSize)));
+           SpinStiffness = 0;
+        }
+
+        //Record partition function ratio if needed
+        if (measRatio){
+           *communicator.stream("estimator") << boost::str(boost::format("%16.8E") %(ZRatio/(1.0*binSize)));
+           ZRatio = 0;
+        }
+
+       //Record energy of each replica
         if  (r>1)         
         
             for (int j=0; j!=r; j++){
@@ -171,13 +289,6 @@ int SSEXY::Measure()
                 *communicator.stream("estimator") << boost::str(boost::format("%16.8E%16.8E") %(Tns[j]/(1.0*binSize)) %E);
             }
 
-        //Record spin stiffness if needed
-        if (measSS){
-           *communicator.stream("estimator") << boost::str(boost::format("%16.8E") %(SpinStiffness/(1.0*binSize)));
-           SpinStiffness = 0;
-        }
-
- 
         //Carry to a new line
         *communicator.stream("estimator") << endl;    
 
@@ -296,14 +407,14 @@ int SSEXY::LoadState(){
         }
         //cout << "Spins line: " << sBuf << endl;
         //cout << "Spins:" << endl;
-        //for (auto spin=Replicas[j]->getSpin()->begin(); spin!=Replicas[j]->getSpin()->end(); spin++)
-        //    cout << *spin << " ";
-        //cout << endl;
-    }   
-}    
+    }
+}        
 
 
+    
+            
 
+        
 //**************************************************************************
 int SSEXY::MCstep()
 {
@@ -648,9 +759,10 @@ int main(int argc, char *argv[])
             ("process_id,p", po::value<int>()->default_value(0),"process id")
             ("replica,r",    po::value<int>()->default_value(1),"number of replicas")
             ("measn,m",      po::value<long>(),"number of measurements to take")
-            ("super,w",      po::value<bool>()->default_value(false),"Turn on the spin stifness measurement. (r must be set to 1)")
+            ("super,w",      "turn on the spin stifness measurement. \n(r must be set to 1)")
+            ("rtrick,t",     "turn on ratio trick")
             ("state,s",      po::value<string>()->default_value(""),"path to the state file")
-            ("region_A,a",   po::value<string>()->default_value(""),"path to the file defining region A");
+            ("region_A,a",   po::value<string>()->default_value(""),"path to the file defining region A.  Equivalently, if set to an integer value,\nit defines the number of consecutif spins in region A. ");
     po::store(po::parse_command_line(argc, argv, cmdLineOptions), params);
     po::notify(params);
 
@@ -658,8 +770,8 @@ int main(int argc, char *argv[])
        cout << cmdLineOptions << "\n";
        return 1;
     } 
-    
-    if  ((params["super"].as<bool>()) && (params["replica"].as<int>() != 1)){
+   
+    if  ((params.count("super")) && (params["replica"].as<int>() != 1)){
         cerr << "Error: cannot measure spin stiffness for a multiple replicas simulation" << endl;
         return 1; 
     }
@@ -684,35 +796,54 @@ int main(int argc, char *argv[])
         return 1; 
     }
 
-    vector<long> Aregion ={};
+    vector<long> Aregion ={};  //Region A vector
     if  (params["region_A"].as<string>()=="" ){
         cout << "Taking A region to be empty" << endl;
     }
+    // Load or generate region A
     else{
-        ifstream RAfile (params["region_A"].as<string>());
-        string line;
-        string lline;
-        if  (RAfile.is_open()){
-            while (getline(RAfile,line))
-                  lline=line;
-            RAfile.close();
-            istringstream sline(lline.erase(0,1));
-            int n;
-            while (sline >> n)
-                Aregion.push_back(n);
-        }
+        char* end;
+        int Aspins = strtol(params["region_A"].as<string>().c_str(), &end, 10);
+        
+        //Generate region A
+        if  (!*end){
+            if  (Aspins>params["height"].as<int>()*params["width"].as<int>()){
+                cout << "Error: region A exceeds the size of the lattice" << endl;
+                return 1;
+            }
+            cout << "Automatic generation of region A containing " << Aspins << " spins" << endl;
+            for (int i=0; i!=Aspins; i++){
+               Aregion.push_back(i); 
+            }
+            }
+        //Load region A
         else{
-            cout << "Unable to process region A file" << endl;
-            return 1;
-            }    
+            cout << "Loading A region from: " << params["region_A"].as<string>() << endl;        
+            ifstream RAfile (params["region_A"].as<string>());
+            string line;
+            string lline;
+            if  (RAfile.is_open()){
+                while (getline(RAfile,line))
+                      lline=line;
+                RAfile.close();
+                istringstream sline(lline.erase(0,1));
+                int n;
+                while (sline >> n)
+                    Aregion.push_back(n);
+            }
+            else{
+                cout << "Unable to process region A file" << endl;
+                return 1;
+                }    
+            }
         }
 
 
     SSEXY ssexy(params["replica"].as<int>(), params["width"].as<int>(),
                 params["height"].as<int>(),  params["temperature"].as<double>(), 
                 params["beta"].as<double>(), params["process_id"].as<int>(), 
-                params["super"].as<bool>(),  params["state"].as<string>(),
-                &Aregion);  
+                params.count("super"),       params.count("rtrick"),   
+                params["state"].as<string>(), &Aregion);  
 
     cout << endl << "Equilibration stage" << endl << endl;
     
@@ -726,7 +857,7 @@ int main(int argc, char *argv[])
     }
         
     cout << endl << "Measurement stage" << endl << endl;
-    for (long i=0; i!=100*params["measn"].as<long>(); i++){
+    for (long i=0; i!=1*params["measn"].as<long>(); i++){
         ssexy.MCstep();
         ssexy.Measure();
     }
