@@ -90,10 +90,10 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName), RandomBase(seed)
     //It is always 8 consecutif spins 
     //following the largest index spin in A.
     if  (measRatio){
-        Aextension.resize(8);
+        Aextended = Aregion;
         int maxSpin = *max_element(Aregion.begin(),Aregion.end());
         for (int i=0; i!=8; i++)
-            Aextension[i] = maxSpin+1+i;
+            Aextended.push_back(maxSpin+1+i);
     }
             
  
@@ -150,74 +150,99 @@ int SSEXY::AdjustParameters()
 
 
 /**************************************************************************
+*Get the next spin as determined by boundary condition (connected or not)
+***************************************************************************/
+int SSEXY::BCnextSpin(int sindex,int& replica, bool connected){
+
+    if (sindex<N) sindex +=N;
+    else          sindex -=N;
+    if  (connected)
+        replica = !replica;
+
+    return sindex;
+}    
+
+/**************************************************************************
 *Measure the number of distinct loops existing between 2 partitions when
 *their boundary condition are taken into account. 
 ***************************************************************************/
-long SSEXY::MeasureNLoop(vector<long>& BC, bool extension){
+long SSEXY::MeasureNLoop(vector<long>& BC){
 
-    //Partition each replica's spins according to
-    //the loops they belong to
-    if (not extension){
-        Replicas[0]->PartitionSpins();  //value of the max loop number
-        Replicas[1]->PartitionSpins();
-    }
-    long mlabel0 = Replicas[0]->getnfLoops();  //value of the max loop number
-    long mlabel1 = Replicas[1]->getnfLoops();
-    long mlabel  = max(mlabel0,mlabel1)+1;         //form a loop label that has been
-                                                   //been observed in the replicas   
-                                                   //It is used ot signal whether the 
-                                                   //the spin has already been relabelled. 
-    long l0;   //loop label for replica 0 
-    long l1;   //loop label for replica 1 
-
-    //Total number of loops observed in both replicas
-    long nTLoop = Replicas[0]->getnLoops() + Replicas[1]->getnLoops();
-
-    //Connect replicas according to boundary conditions (BC),
-    //while keeping track of the new total number of loops.
-    for (auto spina=BC.begin(); spina!=BC.end(); spina++){
-        cout << "Extension: " << extension << " Spin:  " << *spina << " Loops #: " << nTLoop << endl;
-        //Based on the values of loops for a particular spin
-        //relabelling is different.
-        l0 = Replicas[0]->getPart()->at(*spina);
-        l1 = Replicas[1]->getPart()->at(*spina);
-        cout << "l0=" << l0 << " l1=" << l1 << " max=" << mlabel << endl;
-        //if l0 has already been relabelled but not l1, relabel l1
-        if ((l0>mlabel) and (l1<mlabel)){
-            if  (l0!= (l1+mlabel)){
-                Replicas[1]->RelabelLoop(*spina, l1, l1+mlabel);
-                nTLoop -= 1;
+    Replicas[0]->LoopPartition();
+    Replicas[1]->LoopPartition();
+    
+    vector<vector<long>> Partitions;
+    Partitions.push_back(*(Replicas[0]->getPart()));
+    Partitions.push_back(*(Replicas[1]->getPart()));
+   
+    int i;
+    //if  (temp==29){Debug = true;}
+    if  (Debug){
+        cout << "Before connection" << endl;
+        for (int r=0; r!=2; r++){
+            i=0;
+            for (auto spin=Partitions[r].begin(); spin!=Partitions[r].end(); spin++){
+                cout << setw(4) << *spin;
+                i += 1;
+                if  (i == N) cout << endl; 
             }
+        cout << endl << endl;
         }
-        //if l1 has already been relabelled but not l0, relabel l0
-        else if ((l1>mlabel) and (l0<mlabel)){
-             if  (l1!=(l0+mlabel)){
-                 Replicas[0]->RelabelLoop(*spina, l0, l0+mlabel);
-                 nTLoop -= 1;
-            }
-        }
-        //if neither of them has been relabelled, relabel both of them
-        //to the new value derived from l0
-        else if ((l0<mlabel) and (l1<mlabel)){
-            Replicas[0]->RelabelLoop(*spina, l0, l0+mlabel);
-            Replicas[1]->RelabelLoop(*spina, l0, l0+mlabel);
-            nTLoop -= 1;
-        }
-        //if both of them have been relabelled, but they are not identical
-        //an error must have been occurred.
-        else
-            if  (l0 != l1)
-                cout << "Error: multiple replica relabelling fails at spin: " << *spina << endl;
     }
+    int  replica;   
+    int  spin;
+    int  nspin;
+    bool connected;
+    long nLoop = 0;
+    //Repeat for all edge spins in both replicas
+    for (auto ispin=0; ispin!=4*N; ispin++){
+        
+        //Determine the replica it belongs to
+        if  (ispin < 2*N) replica = 0;
+        else              replica = 1;
+      
+        //If the spin hasnt been visited
+        if  (Partitions[replica][ispin-replica*2*N]!=-1){
+            //Follow the BC loop until it comes back to the initial spin
+            nLoop += 1;
+            spin = ispin-replica*2*N;
+            if (Debug) cout << "(r,s) = (" << replica << "," << spin << ")" << endl;
+            do{
+                //Switch to the other end of the loop the spin belongs to
+                nspin = Partitions[replica][spin];
+                if (Debug) cout << "L: (r,s) = (" << replica << "," << nspin << ")" << endl;
 
-    return nTLoop;
+                //Mark the visited spins
+                Partitions[replica][spin]  = -1;
+                Partitions[replica][nspin] = -1;
+                
+                //Switch to the spin connected by BC
+                connected = not(find(BC.begin(),BC.end(),nspin%N)==BC.end());
+                spin = BCnextSpin(nspin, replica, connected);       
+                if (Debug) cout << "B: (r,s) = (" << replica << "," << spin << ")" << endl;
+
+
+            } while (spin!=(ispin-replica*2*N));
+        }
+    }
+    if  (Debug){
+        cout << "After connection" << endl;
+        for (int r=0; r!=2; r++){
+            i=0;
+            for (auto spin=Partitions[r].begin(); spin!=Partitions[r].end(); spin++){
+                cout << setw(4) << *spin;
+                i += 1;
+                if  (i == N) cout << endl; 
+            }
+        cout << endl << endl;
+        }
+    }return nLoop; 
 }        
 
 
 /**************************************************************************
-* Measure Z[Aregion]/Z[Aregion+Aextension], i.e. the ratio of modified part-
-*tion function connected at Aregion and the one connected at Aregion +
-*Aextension region. 
+* Measure Z[Aregion]/Z[Aextended], i.e. the ratio of modified part-
+*tion function connected at Aregion and the one connected at Aextended. 
 ***************************************************************************/
 float SSEXY::MeasureZRatio(){
     //Measure the number of loops formed in each
@@ -226,9 +251,10 @@ float SSEXY::MeasureZRatio(){
     //all necessary structures are already computed.
     //That is why we need a special boolean flag in 
     //order to reduce the computational effort.
-    long AnLoops  = MeasureNLoop(Aregion, false);
-    long EAnLoops = MeasureNLoop(Aextension, true);
-    cout << "A region #: " << AnLoops << "; Extended region #: " << EAnLoops << endl;
+    Replicas[0]->ConstructLinks();
+    Replicas[1]->ConstructLinks();
+    long AnLoops  = MeasureNLoop(Aregion);
+    long EAnLoops = MeasureNLoop(Aextended);
     return (1.0*AnLoops)/(1.0*EAnLoops);
 }
         
@@ -255,7 +281,6 @@ int SSEXY::Measure()
     //Accumulate the partition function ratio estimator
     if (measRatio)
         ZRatio += MeasureZRatio();
-
     // If we've collected enough of measurements
     float E;
     long  TNLegs = 0;
@@ -741,6 +766,8 @@ pair<long,long> SSEXY::SwitchLeg(long enLeg, long vtype){
     }
 return pair <long,long> (exLeg,newtype);
 }
+
+
 //######################################################################
 // Main
 //######################################################################

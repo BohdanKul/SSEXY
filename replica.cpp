@@ -7,6 +7,8 @@
 #include <string.h>
 #include <iomanip>
 #include "helper.cpp"
+#include <map>
+#include <list>
 
 using namespace std;
     
@@ -54,14 +56,13 @@ Replica::Replica(unsigned short _Nx, unsigned short _Ny, float _T, long seed, in
     n = 0;
     sm.resize(M,0);  
 
-    //Initialize the spins partition 
-    spinPart.resize(N);
+    //Initialize the spins partition for both edges 
+    spinPart.resize(2*N);
 
     //Initialize algorithmic variables
     id = _id;
     ESteps  = 10000000;              
     estep = 1000;
-    Debug = false;
 
 }
 
@@ -160,13 +161,12 @@ Below, the left bottom site initiates 2 bonds:
              }
 }
 
-
 float Replica::BondDiagonalEnergy(long b){
       return (float) 0.5;
 }
 
 /**************************************************************
-* Diogonal Monte Carlo move
+* Diagonal Monte Carlo move
 **************************************************************/
 long Replica::DiagonalMove()
 {
@@ -240,7 +240,6 @@ long Replica::VertexType(long oper)
 }
 
 
-
 /**************************************************************
 * Construct links in preparation for an off-diagonal move
 **************************************************************/
@@ -267,6 +266,7 @@ void Replica::ConstructLinks()
         if (*oper != 0){                        //Ignore unit operator
             b = (long)((*oper-(*oper)%2)/2);    //Determine operator's bond based on operator's value
             p++;                                //Increase the operator counter
+           // cout << "oper = " << *oper << endl;
             for (long a=0; a<2; a++){           //Go through both sites connected by the bond 
                 if (last[sites[b][a]] != -1){   //Check whether the site has been already acted upon
                     //cout << sites[b][a] <<endl; 
@@ -276,6 +276,7 @@ void Replica::ConstructLinks()
                 else{
                     first[sites[b][a]] = 4*p+a;             //Record this first occurence
                 }
+            //    cout << "p = " << p << endl;
                 if (a==0) last[sites[b][a]]  = 4*p+3;       //Update what is the last leg acting on this site
                 else      last[sites[b][a]]  = 4*p+2;
             }
@@ -291,135 +292,162 @@ void Replica::ConstructLinks()
 
     }
 } 
+    
 
-/**************************************************************
-* Yields indices of neighbouring spins for a given spin
+
+long Replica::ContinueStraight(long enLeg){
+    return enLeg - sgn(enLeg-2)*(1-(sgn((enLeg%3)-1)-1));
+}
+
+long Replica::SwitchReverse(long enLeg){
+    return enLeg - sgn(enLeg%2-1);
+
+}/**************************************************************
+* Switch leg deterministically for the loop construction
 **************************************************************/
-void Replica::getSpinNeighs(long spin, vector<long>& sneighs){
+long Replica::SwitchLegDeter(long enLeg, long vtype){
     
-    long x = spin % Nx;
-    long y = long(spin / Ny);
-    
-    if  (ndim==2){
-        //Down
-        if (y==0) sneighs[0] = x + (Ny-1)*Nx;   
-        else      sneighs[0] = x + (y -1)*Nx;
-
-        //Left
-        if (x==0) sneighs[1] = y*Nx + Nx-1;       
-        else      sneighs[1] = y*Nx + (x-1);      
-
-        //Up
-        sneighs[2] = x + (y+1)%Ny*Nx;  
-
-        //Right
-        sneighs[3] = y*Nx + (x+1)%Nx; 
+    //Go straight if it is type 1 vertex
+    if  (vtype<3){
+        //cout << "type: " << setw(4) << vtype << " leg: " << setw(4) << enLeg << endl;
+        return ContinueStraight(enLeg);
     }
+    //Switch and reverse if it type 2 vertex
     else{
-        //Left
-        if (x==0) sneighs[1] = Nx-1;       
-        else      sneighs[1] = (x-1);      
-        
-        //Right
-        sneighs[1] = (x+1)%Nx;                      
+        return SwitchReverse(enLeg);
     }
 }
 
+
+
+    
 /**************************************************************
-* Partition the spins according to the links loops they belong to  
+* Partition edge spins based on the loop they belong to. 
 **************************************************************/
-long Replica::PartitionSpins(){
-     
-    long bond;              //Operator bond
-    long s0;                //Bond's first spin
-    long s1;                //Bonds second spin
-    long noLabel = -2;      //Label of a not yet partitioned spin
-    long oLabel;            //Old label of a partition we are about to relabel
-    long nLabel;            //New label of a partition we are about to relabel
-    long initSpin;          //Spin where the ralabelling process starts 
-    nfLoop = 0;             //The number of formed loops 
-    nLoop = 0;              //The number of formed distinct loops  
-    
-    
-    //Reinitiate the main data structure with the defaul value
-    fill(spinPart.begin(),spinPart.end(),noLabel);
-    
-    //Go through all operators, one a time, while assigning every 2 spins
-    //bonded by an operator to the same partition.
-    for (vector<long>::iterator oper=sm.begin(); oper!=sm.end(); oper++){
-        if  (*oper!=0){
-            //Determine the spins bonded by the operator 
-            bond = (long)(*oper/2);   
-            s0 = sites[bond][0];  
-            s1 = sites[bond][1];
+void Replica::LoopPartition(){
 
-            //If those spins havent been labelled them,
-            //assign them to the same new partition
-            if  ((spinPart[s0] == noLabel) and (spinPart[s1] == noLabel)){
-                nfLoop += 1;
-                nLoop  += 1;
-                spinPart[s0] = nfLoop;
-                spinPart[s1] = nfLoop;
-            }
+    //Reset the main datastructure    
+    fill(spinPart.begin(),spinPart.end(),-1);
 
-            //If one of the spins is already partitioned, while the other one
-            //is still not, extend that partion to the unlabelled spin. 
-            else if  ((spinPart[s0] == noLabel) and (spinPart[s1] != noLabel)){
-                spinPart[s0] = spinPart[s1];
-            }
-            else if  ((spinPart[s0] != noLabel) and (spinPart[s1] == noLabel)){
-                spinPart[s1] = spinPart[s0];
-            }
 
-            //If both spins are already labelled, we have to relabel completly
-            //one of the partitions they belong to
-            else if (spinPart[s0] != spinPart[s1]){
-                nLoop -= 1;
-                //Partition with a greater label value gets relabelled
-                oLabel  = max(spinPart[s0],spinPart[s1]);
-                nLabel  = min(spinPart[s0],spinPart[s1]);
-                initSpin = (oLabel==spinPart[s0])*s0 + (oLabel==spinPart[s1])*s1;
-                RelabelLoop(initSpin,oLabel,nLabel);
-            }
-            //There is nothing to be done in the last possible case:
-            //else if (spinPart[s0] == spinPart[s1])
+    //A map from edge legs to spins they are associated with.
+    //In order to distinguish the upper and lower edge spins,
+    //spin index on the upper edge is shifted by the number of spins.
+    map<long,int> LegToSpin;
+
+    //List of unmarked edge legs
+    list<long> leLegs;
+
+    //Fill the map and the list
+    int spin = 0;
+    for (auto leg=first.begin(); leg!=first.end(); leg++){
+        //cout << setw(4) << *leg;
+        if  (*leg!=-1){
+            LegToSpin[*leg] = spin;
+            leLegs.push_back(*leg);
         }
+        spin += 1;
     }
-   
-    //Now label spins that are not acted by operators. Each of them
-    //forms a new loop.
-    for (auto spin=spinPart.begin(); spin!=spinPart.end(); spin++)
-        if  (*spin==noLabel){
-            nfLoop += 1;
-            nLoop  += 1;
-            *spin   = nfLoop;
-        };
+   // cout << endl;
+        //Continue the filling with the 2nd edge legs
+    for (auto leg=last.begin(); leg!=last.end(); leg++){
+        //cout << setw(4) << *leg;
+        if  (*leg!=-1){
+            LegToSpin[*leg] = spin;
+            leLegs.push_back(*leg);
+        }
+        spin += 1;
+    }
+    //leLegs.push_back(-1);
+    //cout << endl;
 
-    //Return the total number of formed loops 
-    return nfLoop;
+    //spin = 0;
+    //for (auto link=links.begin(); link!=links.end(); link++){
+    //    cout <<setw(4) << spin<<": "<< setw(4) << *link << " ";
+    //    if (spin%5==0) cout << endl;
+    //    spin +=1;
+    //}
+    //cout << endl << "Links size: " << links.size() <<endl;
+    
+//Complimentary to the leLegs list, this list contains 
+    //already marked legs
+    list<long> lmLegs;
+    
+    
+    long p;          //Operator index
+    long leg;        //Leg index
+    long nLoop = 0;  //Number of constructed loops
+
+    long counter = 0;
+    //Find the head and tail spins of each loop
+    for (int ispin=0; ispin!=2*N; ispin++){
+        
+        //cout << "new spin: " << ispin << endl; 
+        //Get the leg associated with the spin
+        if (ispin<N) leg = first[ispin];
+        else         leg = last[ispin-N];
+    
+        //If the leg is inactive, the loop is trivial
+        if  (leg==-1) 
+            if  (ispin<N){
+                nLoop += 1;
+                spinPart[ispin] = N+ispin;
+                spinPart[ispin+N] = ispin;
+            }
+            else continue;
+    
+        //Otherwise, follow links until we hit an edge leg
+        else{
+            //If the leg hasnt been assigned to a loop yet
+     //       cout << "spin: "<<setw(4)<<ispin<<" leg: "<<setw(4) << leg << endl;
+            if  (find(lmLegs.begin(),lmLegs.end(),leg)==lmLegs.end()){
+                //Remove it from the list of unmarked legs
+                //Add it to the list of marked legs.
+                leLegs.remove(leg); 
+                lmLegs.push_back(leg);
+ 
+                
+                //Construct a new loop 
+                nLoop += 1; 
+                counter = 0;
+                do {
+                //    counter += 1;   
+                //    if  (counter>10) exit(0); 
+                    //Switch to another leg on the same vertex
+                    p = (long) leg/4;   //index of the corresponding operator
+                    leg = p*4 + SwitchLegDeter(leg%4,vtx[p]);  
+       //             cout << "V switch: " << setw(4) << leg;
+                    //If at this point we havent reached a leg at an edge
+                    if  (find(leLegs.begin(),leLegs.end(),leg)==leLegs.end()){
+                        //Move to the leg it is connected to
+                        leg = links[leg];
+                        p   = (long) leg/4; 
+         //               cout << " L switch: " << setw(4) << leg << endl;
+                      //  if  (leg==-1) exit(0);
+                    }
+                    //Else, stop loop construction
+                    else { 
+           //               cout <<  endl;  
+                          break;
+                        }
+
+                //Stop if  we have reached a leg at an edge
+                }  while (find(leLegs.begin(),leLegs.end(),leg)==leLegs.end());
+            
+                //Remove the end of the loop from the list of unmarked legs
+                //Add it to the list of marked legs.
+                leLegs.remove(leg); 
+                lmLegs.push_back(leg); 
+                //if  (leg!=-1){
+                //    leLegs.remove(leg); 
+                //    lmLegs.push_back(leg); 
+                //}
+            
+                //Store loop's head and tail spins.
+                spinPart[ispin] = LegToSpin[leg]; 
+                spinPart[LegToSpin[leg]] = ispin; 
+            }
+        }
+    }             
 }
-
-
-/**************************************************************
-* Relabel recursively the spins partition that owns
-* initSpin from an old to a new value.
-**************************************************************/
-void Replica::RelabelLoop(long initSpin,long olabel,long nlabel){
-    
-    //First, relabel the orignial spin
-    spinPart[initSpin] = nlabel;
-
-    //Now, focus on its neighbours 
-    //Start by finding all of them    
-    vector<long> temp(2*ndim,-1);             //Just cause 
-    vector<long>& sneighs=temp;
-
-    getSpinNeighs(initSpin, sneighs);
-    
-    //Repeat the process recursively for those 
-    //that belong to the same partition
-    for (auto neigh=sneighs.begin(); neigh!=sneighs.end(); neigh++){
-        if  (spinPart[*neigh] == olabel)
-            RelabelLoop(*neigh,olabel,nlabel);
-    }
-} 
+ 

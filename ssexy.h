@@ -37,7 +37,7 @@ class SSEXY: public RandomBase{
         
         vector<long> ap;
         vector<long> Aregion;
-        vector<long> Aextension;
+        vector<long> Aextended;
         vector<long> shifts;
         vector<long> ns;
         vector<long> Tns;
@@ -65,13 +65,14 @@ class SSEXY: public RandomBase{
         long SwitchReverse(long enLeg);
         long SwitchContinue(long enLeg);
         pair<long,long> SwitchLeg(long leg, long vtype);
+        int BCnextSpin(int sindex, int& replica,bool connected);
 
     public:
        SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, bool _measSS, bool _measRatio, string rfName, vector<long>* _Aregion); 
        int   AdjustParameters();
        int   MCstep(); 
        int   Measure(); 
-       long  MeasureNLoop(vector<long>& BC, bool extension);
+       long  MeasureNLoop(vector<long>& BC);
        float MeasureZRatio(); 
        int   SaveState();
        int   LoadState();

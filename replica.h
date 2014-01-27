@@ -37,9 +37,6 @@ private:
     vector<long> vtx;           //Vertex type
     vector<long> spinPart;      //Partion keeping the label of a loop
                                 //that a particular spin belongs to
-    long nLoop;                 //Number of distinct loops in a partition
-    long nfLoop;                //Number of attempted loops during partitioning
-    bool Debug;
 
  
    
@@ -47,20 +44,20 @@ private:
     float BondDiagonalEnergy(long b);
     void  LatticeGeometry();
     long  VertexType(long oper);
-    void  getSpinNeighs(long spin, vector<long>& sneighs);
+    long  SwitchLegDeter(long enLeg, long vtype);
+    long  ContinueStraight(long enLeg);
+    long  SwitchReverse(long enLeg);
 
 public:
 
     Replica(unsigned short _Nx, unsigned short _Ny, float _T, long seed, int _id);
-    long DiagonalMove();
 
     long  MeasureMagnetization();
     float MeasureSpinStiffness();
 
-    long PartitionSpins();
-    void RelabelLoop(long initSpin,long olabel,long nlabel);
-
+    void LoopPartition();
     void ConstructLinks();
+    long DiagonalMove();
     void AdjustM();
 
     vector<vector<long>> getSites()  {return sites;}
@@ -73,8 +70,7 @@ public:
     vector<long>* getPart()   {return &spinPart;}
     long          getn()      {return n;}
     long          getM()      {return M;}
-    long          getnLoops() {return nLoop;}
-    long          getnfLoops(){return nfLoop;}
+    
     void          setn(long _n) {n=_n;}
     void          setM(long _M) {M=_M;}
     void          setSpinAt(long i, long n){spins[i]=n;}
