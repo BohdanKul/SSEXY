@@ -16,8 +16,8 @@ namespace po = boost::program_options;
 
 
 //**************************************************************************
-SSEXY:: SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, bool _measSS, bool _measRatio, string frName, vector<long>* _Aregion): 
-communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName), RandomBase(seed)
+SSEXY:: SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, bool _measSS, int _maxSpin, string frName, vector<long>* _Aregion): 
+communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_maxSpin), RandomBase(seed)
 {
     long tmp[6][4] = {  {-1,-1,-1,-1},
                         { 1, 1, 1, 1},
@@ -64,7 +64,7 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName), RandomBase(seed)
     SpinStiffness = 0;
     ZRatio        = 0;
     measSS        = _measSS;
-    measRatio     = _measRatio;
+    measRatio     = not (_maxSpin<0);
 
     if (measSS)    cout << "Measuring spin stiffness" << endl;
     if (measRatio) cout << "Measuring Z ratio" << endl;
@@ -91,13 +91,8 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName), RandomBase(seed)
     //following the largest index spin in A.
     if  (measRatio){
         Aextended = Aregion;
-        int maxSpin;
-        if  (Aregion.empty())
-            maxSpin = -1;
-        else
-            maxSpin = *max_element(Aregion.begin(),Aregion.end());
         for (int i=0; i!=8; i++)
-            Aextended.push_back(maxSpin+1+i);
+            Aextended.push_back(_maxSpin+1+i);
     }
             
  
@@ -870,11 +865,17 @@ int main(int argc, char *argv[])
             }
         }
 
-
+    int maxSpin = -1;
+    if  (params.count("rtrick")){
+        if  (Aregion.empty())
+            maxSpin = 0;
+        else
+            maxSpin = *max_element(Aregion.begin(),Aregion.end());
+    }
     SSEXY ssexy(params["replica"].as<int>(), params["width"].as<int>(),
                 params["height"].as<int>(),  params["temperature"].as<double>(), 
                 params["beta"].as<double>(), params["process_id"].as<int>(), 
-                params.count("super"),       params.count("rtrick"),   
+                params.count("super"),       maxSpin,   
                 params["state"].as<string>(), &Aregion);  
 
     cout << endl << "Equilibration stage" << endl << endl;

@@ -68,7 +68,7 @@ class SSEXY: public RandomBase{
         int BCnextSpin(int sindex, int& replica,bool connected);
 
     public:
-       SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, bool _measSS, bool _measRatio, string rfName, vector<long>* _Aregion); 
+       SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, bool _measSS, int _maxSpin, string rfName, vector<long>* _Aregion); 
        int   AdjustParameters();
        int   MCstep(); 
        int   Measure(); 

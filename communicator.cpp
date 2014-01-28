@@ -8,7 +8,7 @@
 using namespace std;
 //using boost::lexical_cast;
 
-Communicator::Communicator(int _Nx, int _Ny, int _r, float _T, float _Beta, long _p, string rfName)
+Communicator::Communicator(int _Nx, int _Ny, int _r, float _T, float _Beta, long _p, string rfName, int _maxSpin)
 {
     p = _p;
     
@@ -19,6 +19,10 @@ Communicator::Communicator(int _Nx, int _Ny, int _r, float _T, float _Beta, long
     }
     else dataName = boost::str(boost::format("%02d-%03d-%03d-%s%06.3f") %_r %_Nx %_Ny %"t" %_T);
     
+    if  (not(_maxSpin<0)){
+        _maxSpin = _maxSpin + (_maxSpin>0);
+        dataName += boost::str(boost::format("-%04d") %_maxSpin);
+    }
 
     types  = vector<string> {"state","estimator"};
     outDir = "OUTPUT"; 
