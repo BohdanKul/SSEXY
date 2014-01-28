@@ -86,9 +86,10 @@ def main():
     # define the mapping between short names and label names 
     parMap = {'x': r'L_x',
               'y': r'L_y',
-              'b': r'\beta',
+              'B': r'\beta',
               'T': r'T',
-              'r': r'r'}
+              'r': r'r',
+              'a': r'N_A'}
 
 
     parser = OptionParser() 
@@ -97,8 +98,8 @@ def main():
     parser.add_option("-b", "--beta", dest="B", type="float",
                       help="number of particles") 
     parser.add_option("-v", "--reduce", dest="reduce",
-                      choices=['r','x','y','T','b'], 
-                      help="variable name for reduction [r,x,y,T,b]") 
+                      choices=['r','x','y','T','b','a'], 
+                      help="variable name for reduction [r,x,y,T,b,a]") 
     parser.add_option("-r", "--replica", dest = "r",type="int",
                       help="number of replica copies") 
     parser.add_option("-x", "--Lx", dest="x", type="int",
@@ -107,13 +108,12 @@ def main():
                       help="lattice height") 
     parser.add_option("-s", "--skip", dest="skip", type="int",
                       help="number of measurements to skip") 
-    parser.add_option("-p", "--plot", action="store_true", dest="plot",
-                      help="do we want to produce data plots?") 
+    parser.add_option("-p", "--plot", help="plot a particular estimator", type="str")
     parser.set_defaults(plot=False)
     parser.set_defaults(skip=0)
     (options, args) = parser.parse_args() 
     if (not options.reduce):
-        parser.error("need a correct reduce flag (-r,--reduce): [r,x,y,T,b]")
+        parser.error("need a correct reduce flag (-r,--reduce): [r,x,y,T,b,a]")
     # parse the command line options and get the reduce flag
 
 
@@ -129,6 +129,11 @@ def main():
     # We first reduce the scalar estimators and output them to disk
     head1,scAve1,scErr1 = getScalarEst('estimator',ssexy,outName,options.reduce)
     if options.plot:
+        if  not(options.plot in head1):
+            print "Incorrect estimator to plot. Choose among: "
+            print head1
+        else:
+            pindex =  head1.index(options.plot)
         rcParams.update(mplrc.aps['params'])
         # Get the changing parameter that we are plotting against
         param = []
@@ -145,13 +150,14 @@ def main():
         figure(1,(8,6))
         connect('key_press_event',kevent.press)
         ax = subplot(111)
-        errorbar(param, scAve1[:,1], yerr=scErr1[:,1],\
+        
+        errorbar(param, scAve1[:,pindex], yerr=scErr1[:,pindex],\
                 marker='s',mec=colors[1],mfc=colors[1],\
                 ls='None',capsize=4,label=r'$\mathrm{}%s$' %lab)
         xlabel(r'$\mathrm{%s}$' %parMap[options.reduce])
         ylabel(r'$\mathrm{E}$')
         legend(loc='best',frameon=False)
-        tight_layout()
+        #tight_layout()
         show()
 
 # ----------------------------------------------------------------------
