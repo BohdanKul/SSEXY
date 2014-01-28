@@ -240,7 +240,8 @@ long SSEXY::MeasureNLoop(vector<long>& BC){
 //            }
 //        cout << endl << endl;
 //        }
-    }return nLoop; 
+//    }
+    return nLoop; 
 }        
 
 
