@@ -57,7 +57,7 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName), RandomBase(seed)
     Debug         = false;
     Nloops        = 1;    
     nMeas         = 0;
-    binSize       = 1;
+    binSize       = 100;
     saveFreq      = 1; 
     nSaved        = 0;
     maxLoopSize   = 2400000;
@@ -91,7 +91,11 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName), RandomBase(seed)
     //following the largest index spin in A.
     if  (measRatio){
         Aextended = Aregion;
-        int maxSpin = *max_element(Aregion.begin(),Aregion.end());
+        int maxSpin;
+        if  (Aregion.empty())
+            maxSpin = -1;
+        else
+            maxSpin = *max_element(Aregion.begin(),Aregion.end());
         for (int i=0; i!=8; i++)
             Aextended.push_back(maxSpin+1+i);
     }
@@ -176,19 +180,19 @@ long SSEXY::MeasureNLoop(vector<long>& BC){
     Partitions.push_back(*(Replicas[1]->getPart()));
    
     int i;
-    //if  (temp==29){Debug = true;}
-    if  (Debug){
-        cout << "Before connection" << endl;
-        for (int r=0; r!=2; r++){
-            i=0;
-            for (auto spin=Partitions[r].begin(); spin!=Partitions[r].end(); spin++){
-                cout << setw(4) << *spin;
-                i += 1;
-                if  (i == N) cout << endl; 
-            }
-        cout << endl << endl;
-        }
-    }
+//    if  (temp==29){Debug = true;}
+//    if  (Debug){
+//        cout << "Before connection" << endl;
+//        for (int r=0; r!=2; r++){
+//            i=0;
+//            for (auto spin=Partitions[r].begin(); spin!=Partitions[r].end(); spin++){
+//                cout << setw(4) << *spin;
+//                i += 1;
+//                if  (i == N) cout << endl; 
+//            }
+//        cout << endl << endl;
+//        }
+//    }
     int  replica;   
     int  spin;
     int  nspin;
@@ -206,11 +210,11 @@ long SSEXY::MeasureNLoop(vector<long>& BC){
             //Follow the BC loop until it comes back to the initial spin
             nLoop += 1;
             spin = ispin-replica*2*N;
-            if (Debug) cout << "(r,s) = (" << replica << "," << spin << ")" << endl;
+//            if (Debug) cout << "(r,s) = (" << replica << "," << spin << ")" << endl;
             do{
                 //Switch to the other end of the loop the spin belongs to
                 nspin = Partitions[replica][spin];
-                if (Debug) cout << "L: (r,s) = (" << replica << "," << nspin << ")" << endl;
+//                if (Debug) cout << "L: (r,s) = (" << replica << "," << nspin << ")" << endl;
 
                 //Mark the visited spins
                 Partitions[replica][spin]  = -1;
@@ -219,23 +223,23 @@ long SSEXY::MeasureNLoop(vector<long>& BC){
                 //Switch to the spin connected by BC
                 connected = not(find(BC.begin(),BC.end(),nspin%N)==BC.end());
                 spin = BCnextSpin(nspin, replica, connected);       
-                if (Debug) cout << "B: (r,s) = (" << replica << "," << spin << ")" << endl;
+//                if (Debug) cout << "B: (r,s) = (" << replica << "," << spin << ")" << endl;
 
 
             } while (spin!=(ispin-replica*2*N));
         }
     }
-    if  (Debug){
-        cout << "After connection" << endl;
-        for (int r=0; r!=2; r++){
-            i=0;
-            for (auto spin=Partitions[r].begin(); spin!=Partitions[r].end(); spin++){
-                cout << setw(4) << *spin;
-                i += 1;
-                if  (i == N) cout << endl; 
-            }
-        cout << endl << endl;
-        }
+//    if  (Debug){
+//        cout << "After connection" << endl;
+//        for (int r=0; r!=2; r++){
+//            i=0;
+//            for (auto spin=Partitions[r].begin(); spin!=Partitions[r].end(); spin++){
+//                cout << setw(4) << *spin;
+//                i += 1;
+//                if  (i == N) cout << endl; 
+//            }
+//        cout << endl << endl;
+//        }
     }return nLoop; 
 }        
 
@@ -884,7 +888,7 @@ int main(int argc, char *argv[])
     }
         
     cout << endl << "Measurement stage" << endl << endl;
-    for (long i=0; i!=1*params["measn"].as<long>(); i++){
+    for (long i=0; i!=100*params["measn"].as<long>(); i++){
         ssexy.MCstep();
         ssexy.Measure();
     }
