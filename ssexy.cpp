@@ -16,7 +16,7 @@ namespace po = boost::program_options;
 
 
 //**************************************************************************
-SSEXY:: SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, bool _measSS, int _maxSpin, string frName, vector<long>* _Aregion): 
+SSEXY:: SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, bool _measSS, int _maxSpin, int _incSpin, string frName, vector<long>* _Aregion): 
 communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_maxSpin), RandomBase(seed)
 {
     long tmp[6][4] = {  {-1,-1,-1,-1},
@@ -91,7 +91,7 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_maxSpin), RandomBase(seed)
     //following the largest index spin in A.
     if  (measRatio){
         Aextended = Aregion;
-        for (int i=0; i!=8; i++)
+        for (int i=0; i!=_incSpin; i++)
             Aextended.push_back(_maxSpin+1+i);
     }
             
@@ -787,7 +787,7 @@ int main(int argc, char *argv[])
             ("replica,r",    po::value<int>()->default_value(1),"number of replicas")
             ("measn,m",      po::value<long>(),"number of measurements to take")
             ("super,w",      "turn on the spin stifness measurement. \n(r must be set to 1)")
-            ("rtrick,t",     "turn on ratio trick")
+            ("rtrick,t",     po::value<int>()->default_value(-1),"The number of extra spins in an extended partition for ratio trick")
             ("state,s",      po::value<string>()->default_value(""),"path to the state file")
             ("region_A,a",   po::value<string>()->default_value(""),"path to the file defining region A.  Equivalently, if set to an integer value,\nit defines the number of consecutif spins in region A. ");
     po::store(po::parse_command_line(argc, argv, cmdLineOptions), params);
@@ -826,6 +826,7 @@ int main(int argc, char *argv[])
     vector<long> Aregion ={};  //Region A vector
     if  (params["region_A"].as<string>()=="" ){
         cout << "Taking A region to be empty" << endl;
+
     }
     // Load or generate region A
     else{
@@ -866,7 +867,9 @@ int main(int argc, char *argv[])
         }
 
     int maxSpin = -1;
+    int incSpin = -1;
     if  (params.count("rtrick")){
+        incSpin = params["rtrick"].as<int>();
         if  (Aregion.empty())
             maxSpin = 0;
         else
@@ -875,7 +878,7 @@ int main(int argc, char *argv[])
     SSEXY ssexy(params["replica"].as<int>(), params["width"].as<int>(),
                 params["height"].as<int>(),  params["temperature"].as<double>(), 
                 params["beta"].as<double>(), params["process_id"].as<int>(), 
-                params.count("super"),       maxSpin,   
+                params.count("super"),       maxSpin, incSpin, 
                 params["state"].as<string>(), &Aregion);  
 
     cout << endl << "Equilibration stage" << endl << endl;
