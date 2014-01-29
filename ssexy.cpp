@@ -54,7 +54,7 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_maxSpin), RandomBase(seed)
     //Load replicas' datastructures if needed
     if (frName!="") LoadState();
     
-    Debug         = false;
+    Debug         = true;
     Nloops        = 1;    
     nMeas         = 0;
     binSize       = 100;
@@ -180,7 +180,7 @@ long SSEXY::MeasureNLoop(vector<long>& BC){
     Partitions.push_back(*(Replicas[1]->getPart()));
    
     int i;
-//    if  (temp==29){Debug = true;}
+//    bool dDebug = true;
 //    if  (Debug){
 //        cout << "Before connection" << endl;
 //        for (int r=0; r!=2; r++){
@@ -231,9 +231,20 @@ long SSEXY::MeasureNLoop(vector<long>& BC){
 
 
             } while ((spin!=ospin) or (replica!=oreplica));
+//            if  (dDebug){
+//                for (int r=0; r!=2; r++){
+//                    i=0;
+//                    for (auto spin=Partitions[r].begin(); spin!=Partitions[r].end(); spin++){
+//                        cout << setw(4) << *spin;
+//                        i += 1;
+//                        if  (i == N) cout << endl; 
+//                    }
+//                cout << endl << endl;
+//                }
+//            }
         }
-    }
-//    if  (Debug){
+   }
+//   if  (Debug){
 //        cout << "After connection" << endl;
 //        for (int r=0; r!=2; r++){
 //            i=0;
@@ -245,6 +256,7 @@ long SSEXY::MeasureNLoop(vector<long>& BC){
 //        cout << endl << endl;
 //        }
 //    }
+//    cout << "#Loops: " << nLoop << endl;
     return nLoop; 
 }        
 
@@ -264,7 +276,8 @@ float SSEXY::MeasureZRatio(){
     Replicas[1]->ConstructLinks();
     long AnLoops  = MeasureNLoop(Aregion);
     long EAnLoops = MeasureNLoop(Aextended);
-    return (1.0*EAnLoops)/(1.0*AnLoops);
+//    cout << "Ratio: " << (1.0*EAnLoops)/(1.0*AnLoops) << endl;
+    return AnLoops-EAnLoops;
 }
         
 
@@ -311,7 +324,7 @@ int SSEXY::Measure()
 
         //Record partition function ratio if needed
         if (measRatio){
-           *communicator.stream("estimator") << boost::str(boost::format("%16.8E") %(ZRatio/(1.0*binSize)));
+           *communicator.stream("estimator") << boost::str(boost::format("%16.8E") %(1.0*ZRatio/(1.0*binSize)));
            ZRatio = 0;
         }
 

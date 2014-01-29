@@ -42,7 +42,7 @@ class SSEXY: public RandomBase{
         vector<long> ns;
         vector<long> Tns;
         float SpinStiffness;
-        float ZRatio;
+        long ZRatio;
         
         vector<long> NvisitedLegs;   //Number of visited legs per MC step
         vector<long> TNvisitedLegs;  //Accumulated number of visited legs per MC step
