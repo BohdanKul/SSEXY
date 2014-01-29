@@ -125,7 +125,8 @@ def main():
 
     numFiles = len(fileNames)
 
-    colors  = loadgmt.getColorList('cw/1','cw1-029',max(numFiles,2))
+    #colors  = loadgmt.getColorList('cw/1','cw1-029',max(numFiles,2))
+    colors = ["#66CAAE", "#CF6BDD", "#E27844", "#7ACF57", "#92A1D6", "#E17597", "#C1B546",'b']
  
     fig = figure(1,figsize=(13,6))
     ax = subplot(111)
@@ -141,31 +142,22 @@ def main():
             params = GetFileParams(fileName)
             col    = GetHeaderNumber(fileName,args.estimator)
             data = loadtxt(fileName,usecols=col)
-            extra = 'one replica'
-            ls = ":"
-            if fileName.find('200000000') != -1:
-               data *= 0.5   
-               extra = "connected"
-               ls = "-"
-            if fileName.find('300000000') != -1:
-               data *= 0.5   
-               extra = "disconnected (*0.5)" 
-               ls = "--"
+
             ID = fileName[-14:-4]
             if size(data) > 1:
                 sma = simpleMovingAverage(args.period,data[args.skip:])
-                ax.plot(sma,color=colors[i],linewidth=3,linestyle=ls,label=r'$T = %s$; %s' %(params['T'],extra))
+                ax.plot(sma,color=colors[i%len(colors)],linewidth=3,linestyle='-',label=r'$T = %s$' %params['T'])
                 #ax.plot([0,len(sma)],[ref[i],ref[i]],color=colors[i],linewidth=1,marker='None',linestyle='-')
-                bins = MCstat.bin(data) 
+                bins = MCstat.bin(data[args.skip:]) 
                 dataErr = amax(bins,axis=0)
-                dataAve = average(data)
-                print 'T= %s %0.6f +/- %0.6f (%s)' %(params['T'],dataAve,dataErr,extra)
+                dataAve = average(data[args.skip:])
+                print 'T= %s %0.6f +/- %0.6f ' %(params['T'],dataAve,dataErr)
 
         else:
             print '%s contains no measurements' %fileName
     xlabel('MC bins (p=%s)' %args.period)
     ylabel(args.estimator)
-    tight_layout()
+    #tight_layout()
     legend() 
     show()
 
