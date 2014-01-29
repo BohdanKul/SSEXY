@@ -91,8 +91,13 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_maxSpin), RandomBase(seed)
     //following the largest index spin in A.
     if  (measRatio){
         Aextended = Aregion;
-        for (int i=0; i!=_incSpin; i++)
-            Aextended.push_back(_maxSpin+1+i);
+        int offset = not(Aregion.empty());
+        if  (_incSpin<0)
+            for (int i=0; i!=-_incSpin; i++)
+                Aextended.pop_back();
+        else
+            for (int i=0; i!=_incSpin; i++)
+                Aextended.push_back(_maxSpin+offset+i);
     }
             
  
@@ -193,6 +198,8 @@ long SSEXY::MeasureNLoop(vector<long>& BC){
     int  nspin;
     bool connected;
     long nLoop = 0;
+    int  ospin;
+    int  oreplica;
     //Repeat for all edge spins in both replicas
     for (auto ispin=0; ispin!=4*N; ispin++){
         
@@ -204,7 +211,9 @@ long SSEXY::MeasureNLoop(vector<long>& BC){
         if  (Partitions[replica][ispin-replica*2*N]!=-1){
             //Follow the BC loop until it comes back to the initial spin
             nLoop += 1;
-            spin = ispin-replica*2*N;
+            ospin = ispin-replica*2*N;
+            spin  = ospin;
+            oreplica = replica;
 //            if (Debug) cout << "(r,s) = (" << replica << "," << spin << ")" << endl;
             do{
                 //Switch to the other end of the loop the spin belongs to
@@ -221,7 +230,7 @@ long SSEXY::MeasureNLoop(vector<long>& BC){
 //                if (Debug) cout << "B: (r,s) = (" << replica << "," << spin << ")" << endl;
 
 
-            } while (spin!=(ispin-replica*2*N));
+            } while ((spin!=ospin) or (replica!=oreplica));
         }
     }
 //    if  (Debug){
@@ -255,7 +264,7 @@ float SSEXY::MeasureZRatio(){
     Replicas[1]->ConstructLinks();
     long AnLoops  = MeasureNLoop(Aregion);
     long EAnLoops = MeasureNLoop(Aextended);
-    return (1.0*AnLoops)/(1.0*EAnLoops);
+    return (1.0*EAnLoops)/(1.0*AnLoops);
 }
         
 
