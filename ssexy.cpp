@@ -277,7 +277,7 @@ float SSEXY::MeasureZRatio(){
     long AnLoops  = MeasureNLoop(Aregion);
     long EAnLoops = MeasureNLoop(Aextended);
 //    cout << "Ratio: " << (1.0*EAnLoops)/(1.0*AnLoops) << endl;
-    return AnLoops-EAnLoops;
+    return pow(2,AnLoops-EAnLoops);
 }
         
 
