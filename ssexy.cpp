@@ -809,7 +809,7 @@ int main(int argc, char *argv[])
             ("replica,r",    po::value<int>()->default_value(1),"number of replicas")
             ("measn,m",      po::value<long>(),"number of measurements to take")
             ("super,w",      "turn on the spin stifness measurement. \n(r must be set to 1)")
-            ("rtrick,t",     po::value<int>()->default_value(-1),"The number of extra spins in an extended partition for ratio trick")
+            ("rtrick,t",     "The number of extra spins in an extended partition for ratio trick")
             ("state,s",      po::value<string>()->default_value(""),"path to the state file")
             ("region_A,a",   po::value<string>()->default_value(""),"path to the file defining region A.  Equivalently, if set to an integer value,\nit defines the number of consecutif spins in region A. ");
     po::store(po::parse_command_line(argc, argv, cmdLineOptions), params);
