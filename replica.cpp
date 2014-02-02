@@ -448,6 +448,13 @@ void Replica::LoopPartition(){
                 spinPart[LegToSpin[leg]] = ispin; 
             }
         }
-    }             
+    }            
+//    int i = 0; 
+//    for (auto spin=spinPart.begin(); spin!=spinPart.end(); spin++){
+//        cout << setw(4) << *spin;
+//        i += 1;
+//        if  (i == N) cout << endl; 
+//    }
+//    cout << endl;
 }
  

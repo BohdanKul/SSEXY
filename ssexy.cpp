@@ -231,8 +231,9 @@ long SSEXY::MeasureNLoop(vector<long>& BC){
 
 
             } while ((spin!=ospin) or (replica!=oreplica));
-//            if  (dDebug){
-//                for (int r=0; r!=2; r++){
+//            cout << endl;
+//             if  (true){
+//                  for (int r=0; r!=2; r++){
 //                    i=0;
 //                    for (auto spin=Partitions[r].begin(); spin!=Partitions[r].end(); spin++){
 //                        cout << setw(4) << *spin;
@@ -241,9 +242,9 @@ long SSEXY::MeasureNLoop(vector<long>& BC){
 //                    }
 //                cout << endl << endl;
 //                }
-//            }
+            }
         }
-   }
+   
 //   if  (Debug){
 //        cout << "After connection" << endl;
 //        for (int r=0; r!=2; r++){
@@ -809,7 +810,7 @@ int main(int argc, char *argv[])
             ("replica,r",    po::value<int>()->default_value(1),"number of replicas")
             ("measn,m",      po::value<long>(),"number of measurements to take")
             ("super,w",      "turn on the spin stifness measurement. \n(r must be set to 1)")
-            ("rtrick,t",     "The number of extra spins in an extended partition for ratio trick")
+            ("rtrick,t",     po::value<int>(), "The number of extra spins in an extended partition for ratio trick")
             ("state,s",      po::value<string>()->default_value(""),"path to the state file")
             ("region_A,a",   po::value<string>()->default_value(""),"path to the file defining region A.  Equivalently, if set to an integer value,\nit defines the number of consecutif spins in region A. ");
     po::store(po::parse_command_line(argc, argv, cmdLineOptions), params);
