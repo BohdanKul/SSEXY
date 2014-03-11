@@ -2,7 +2,7 @@
 '''
 import os
 from operator import itemgetter, attrgetter
-
+from numpy import *
 
 # -----------------------------------------------------------------------------
 def getHeadersFromFile(fileName): 
@@ -15,7 +15,7 @@ def getHeadersFromFile(fileName):
     inFile.close()
     return headers
 
-# ----------------------------------------------------------------------------
+## ----------------------------------------------------------------------------
 def getParamMap(fname):
     '''Get the parameters from the output filename.  
     
@@ -34,14 +34,30 @@ def getParamMap(fname):
 
     params = {'r': int(fileParts[1]),
               'x'     : int(fileParts[2]),       
-              'y'     : int(fileParts[3])
-             }
+              'y'     : int(fileParts[3])}
     if 't' in fileParts[4]: params['T']    = float(fileParts[4][1:])
     else:                   params['b']    = float(fileParts[4][1:])
-
-    if  len(fileParts) == 7:
-        params['a'] = fileParts[5]
     return params 
+
+##---------------------------------------------------------------------------
+def getReduceParamMap(fname):
+    '''Get the parameters from the output filename.  
+    '''
+
+    fileParts  = fname.rstrip('.dat').split('_')
+    fileParts.pop(0)
+
+    paramMap = {}
+    for part in fileParts:
+        if  '-' in part:
+            #paramMap.update(dict([part.split('-')]))
+            (item,value)=part.split('-')
+            if '.' in value: paramMap[item] = float(value)
+            else:            paramMap[item] = int(value)
+        else:
+            paramMap[part] = ''
+
+    return paramMap 
 
 # -------------------------------------------------------------------------------
 def getWildCardString(options):
@@ -70,6 +86,69 @@ def getWildCardString(options):
 
     return dataName, out
 
+
+
+# -------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
+class ScalarReduce:
+
+     def __init__(self, fileName):
+
+        self.fname    = fileName
+        self.paramMap = getReduceParamMap(fileName)
+        self.headers  = getHeadersFromFile(fileName)
+        self.rvar     = self.headers[0]
+
+## -------------------------------------------------------------------------------
+     def getTupleIdstr(self,order):
+            
+         tupleIdstr = ''  
+         for item in order:
+             if item in self.paramMap.keys():
+                if self.paramMap[item]:
+                   tupleIdstr += r'%s=%s\,' %(item,self.paramMap[item])
+                else:    
+                   tupleIdstr += r'%s\,' %(item)
+         return tupleIdstr
+
+#-------------------------------------------------------------------------------
+     def getTupleId(self,order):
+            
+         tupleId = ()  
+         for item in order:
+             if self.paramMap[item]:
+                TupleId += self.paramMap[item]
+         return TupleId
+
+# -------------------------------------------------------------------------------
+     def getHeaders(self):
+         return self.headers
+
+# -------------------------------------------------------------------------------
+     def getParmap(self):
+         return self.paramMap
+
+# -------------------------------------------------------------------------------
+     def loadData(self):
+         self.data     = loadtxt(self.fname)
+         
+# -------------------------------------------------------------------------------
+     def getrParams(self):
+         return self.rvar, self.data[:,0]
+
+# -------------------------------------------------------------------------------
+     def getAverages(self,estimator):
+         if not(estimator in self.headers):
+             return [],[]
+         else:   
+             index = self.headers.index(estimator)
+             return self.data[:,index], self.data[:,index+1]
+
+
+
+# -------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 # -------------------------------------------------------------------------------
 class SSEXYHelp:
     ''' Helper methods for analzing SSEXY output data. '''
