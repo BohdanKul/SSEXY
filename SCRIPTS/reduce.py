@@ -48,14 +48,24 @@ def getScalarEst(type,ssexy,outName,reduceFlag, skip=0):
         else: 
             SpanJobAverage = -1
         lAveraged += [SpanJobAverage]     
-
     ave = zeros([len(fileNames),len(headers)],float)
     err = zeros([len(fileNames),len(headers)],float)
     for i,fname in enumerate(fileNames):
         # Compute the averages and error
         data = loadtxt(fname,ndmin=2)[skip:,:]
+        headers   = ssexyhelp.getHeadersFromFile(fname)
+        if 'dnT' in headers:
+            headers = headers[::2]
+            oldFormat = True
+            print "Old estimator file format detected"
+        #if 'ZRatio' in headers:
+        #    headers = np.array(headers)
+        #    headers = np.delete(headers,3,axis=0)
+        #    data = np.delete(data,3,axis=1)
         if oldFormat:
             data = data[:,::2]
+        print fname
+        print headers
         ave[i,:],err[i,:] = getStats(data,lAveraged[i])
     
     # output the estimator data to disk
@@ -67,8 +77,20 @@ def getScalarEst(type,ssexy,outName,reduceFlag, skip=0):
         outFile.write('%16s%16s' % (head,'+/-'))
     outFile.write('\n')
 
-    # the data
-    for i,f in enumerate(fileNames):
+    # sort based on the reduced parameter
+    Vals = []
+    for i,fname in enumerate(fileNames):
+        Vals.append(float(ssexy.params[ssexy.id[i]][reduceFlag]))
+   
+    print Vals
+    lorder = range(len(fileNames))
+    print lorder
+    lorder = zip(*sorted(zip(Vals,lorder)))[1]  
+    print lorder
+    
+    
+    # record into a file
+    for i in lorder:
         outFile.write('%16.8E' % float(ssexy.params[ssexy.id[i]][reduceFlag]))
         for j,h in enumerate(headers):
             outFile.write('%16.8E%16.8E' % (ave[i,j],err[i,j]))
@@ -86,7 +108,7 @@ def main():
     # define the mapping between short names and label names 
     parMap = {'x': r'L_x',
               'y': r'L_y',
-              'B': r'\beta',
+              'b': r'\beta',
               'T': r'T',
               'r': r'r',
               'a': r'N_A'}
