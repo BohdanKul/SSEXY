@@ -54,7 +54,7 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_maxSpin), RandomBase(seed)
     //Load replicas' datastructures if needed
     if (frName!="") LoadState();
     
-    Debug         = true;
+    Debug         = false;
     Nloops        = 1;    
     nMeas         = 0;
     binSize       = 100;
@@ -172,27 +172,25 @@ int SSEXY::BCnextSpin(int sindex,int& replica, bool connected){
 ***************************************************************************/
 long SSEXY::MeasureNLoop(vector<long>& BC){
 
-    Replicas[0]->LoopPartition();
-    Replicas[1]->LoopPartition();
     
     vector<vector<long>> Partitions;
     Partitions.push_back(*(Replicas[0]->getPart()));
     Partitions.push_back(*(Replicas[1]->getPart()));
    
     int i;
-//    bool dDebug = true;
-//    if  (Debug){
-//        cout << "Before connection" << endl;
-//        for (int r=0; r!=2; r++){
-//            i=0;
-//            for (auto spin=Partitions[r].begin(); spin!=Partitions[r].end(); spin++){
-//                cout << setw(4) << *spin;
-//                i += 1;
-//                if  (i == N) cout << endl; 
-//            }
-//        cout << endl << endl;
-//        }
-//    }
+    bool dDebug = true;
+    if  (Debug){
+        cout << endl << "Before connection=================================" << endl;
+        for (int r=0; r!=2; r++){
+            i=0;
+            for (auto spin=Partitions[r].begin(); spin!=Partitions[r].end(); spin++){
+                cout << setw(4) << *spin;
+                i += 1;
+                if  (i == N) cout << endl; 
+            }
+        cout << endl << endl;
+        }
+    }
     int  replica;   
     int  spin;
     int  nspin;
@@ -201,63 +199,49 @@ long SSEXY::MeasureNLoop(vector<long>& BC){
     int  ospin;
     int  oreplica;
     //Repeat for all edge spins in both replicas
-    for (auto ispin=0; ispin!=4*N; ispin++){
-        
-        //Determine the replica it belongs to
-        if  (ispin < 2*N) replica = 0;
-        else              replica = 1;
-      
-        //If the spin hasnt been visited
-        if  (Partitions[replica][ispin-replica*2*N]!=-1){
-            //Follow the BC loop until it comes back to the initial spin
-            nLoop += 1;
-            ospin = ispin-replica*2*N;
-            spin  = ospin;
-            oreplica = replica;
-//            if (Debug) cout << "(r,s) = (" << replica << "," << spin << ")" << endl;
-            do{
-                //Switch to the other end of the loop the spin belongs to
-                nspin = Partitions[replica][spin];
-//                if (Debug) cout << "L: (r,s) = (" << replica << "," << nspin << ")" << endl;
+    for (auto oreplica=0; oreplica!=2; oreplica++){
+        for (auto ispin=0; ispin!=2*N; ispin++){
+            
+            //If the spin hasnt been visited
+            if  (Partitions[oreplica][ispin]!=-1){
+                //Follow the BC loop until it comes back to the initial spin
+                nLoop += 1;
+                ospin = ispin;
+                spin    = ospin;
+                replica = oreplica;
+                if (Debug) cout << "(r,s) = (" << replica << "," << spin << ")" << endl;
+                do{
+                    //Switch to the other end of the loop the spin belongs to
+                    nspin = Partitions[replica][spin];
+                    if (Debug) cout << "L: (r,s) = (" << replica << "," << nspin << ")" << endl;
 
-                //Mark the visited spins
-                Partitions[replica][spin]  = -1;
-                Partitions[replica][nspin] = -1;
-                
-                //Switch to the spin connected by BC
-                connected = not(find(BC.begin(),BC.end(),nspin%N)==BC.end());
-                spin = BCnextSpin(nspin, replica, connected);       
-//                if (Debug) cout << "B: (r,s) = (" << replica << "," << spin << ")" << endl;
+                    //Mark the visited spins
+                    Partitions[replica][spin]  = -1;
+                    Partitions[replica][nspin] = -1;
+                    
+                    //Switch to the spin connected by BC
+                    connected = not(find(BC.begin(),BC.end(),nspin%N)==BC.end());
+                    spin = BCnextSpin(nspin, replica, connected);       
+                    if (Debug) cout << "B: (r,s) = (" << replica << "," << spin << ")" << endl;
 
 
-            } while ((spin!=ospin) or (replica!=oreplica));
-//            cout << endl;
-//             if  (true){
-//                  for (int r=0; r!=2; r++){
-//                    i=0;
-//                    for (auto spin=Partitions[r].begin(); spin!=Partitions[r].end(); spin++){
-//                        cout << setw(4) << *spin;
-//                        i += 1;
-//                        if  (i == N) cout << endl; 
-//                    }
-//                cout << endl << endl;
-//                }
+                } while ((spin!=ospin) or (replica!=oreplica));
+                if  (Debug){
+                     for (int r=0; r!=2; r++){
+                         i=0;
+                         for (auto spin=Partitions[r].begin(); spin!=Partitions[r].end(); spin++){
+                             cout << setw(4) << *spin;
+                             i += 1;
+                             if  (i == N) cout << endl; 
+                         }
+                     cout << endl << endl;
+                     }
+                 }
             }
         }
-   
-//   if  (Debug){
-//        cout << "After connection" << endl;
-//        for (int r=0; r!=2; r++){
-//            i=0;
-//            for (auto spin=Partitions[r].begin(); spin!=Partitions[r].end(); spin++){
-//                cout << setw(4) << *spin;
-//                i += 1;
-//                if  (i == N) cout << endl; 
-//            }
-//        cout << endl << endl;
-//        }
-//    }
-//    cout << "#Loops: " << nLoop << endl;
+    }
+  
+    cout << "#Loops: " << nLoop << endl;
     return nLoop; 
 }        
 
@@ -273,8 +257,6 @@ float SSEXY::MeasureZRatio(){
     //all necessary structures are already computed.
     //That is why we need a special boolean flag in 
     //order to reduce the computational effort.
-    Replicas[0]->ConstructLinks();
-    Replicas[1]->ConstructLinks();
     long AnLoops  = MeasureNLoop(Aregion);
     long EAnLoops = MeasureNLoop(Aextended);
 //    cout << "Ratio: " << (1.0*EAnLoops)/(1.0*AnLoops) << endl;
@@ -476,6 +458,7 @@ int SSEXY::MCstep()
         if  (Replicas[j]->DiagonalMove()==1)
             Replicas[j]->AdjustM();
         Replicas[j]->ConstructLinks();
+        Replicas[j]->LoopPartition();
         firsts[j] = Replicas[j]->getFirst();        
         lasts[j]  = Replicas[j]->getLast();        
         links[j]  = Replicas[j]->getLink();        

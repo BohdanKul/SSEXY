@@ -340,26 +340,26 @@ void Replica::LoopPartition(){
 
     //Fill the map and the list
     int spin = 0;
+//    cout << endl << "Before partitionning-------------------------------" << endl;
     for (auto leg=first.begin(); leg!=first.end(); leg++){
-        //cout << setw(4) << *leg;
+//        cout << setw(4) << *leg;
         if  (*leg!=-1){
             LegToSpin[*leg] = spin;
             leLegs.push_back(*leg);
         }
         spin += 1;
     }
-   // cout << endl;
-        //Continue the filling with the 2nd edge legs
+    cout << endl;
+    //Continue the filling with the 2nd edge legs
     for (auto leg=last.begin(); leg!=last.end(); leg++){
-        //cout << setw(4) << *leg;
+//        cout << setw(4) << *leg;
         if  (*leg!=-1){
             LegToSpin[*leg] = spin;
             leLegs.push_back(*leg);
         }
         spin += 1;
     }
-    //leLegs.push_back(-1);
-    //cout << endl;
+//    cout << endl;
 
     //spin = 0;
     //for (auto link=links.begin(); link!=links.end(); link++){
@@ -378,7 +378,6 @@ void Replica::LoopPartition(){
     long leg;        //Leg index
     long nLoop = 0;  //Number of constructed loops
 
-    long counter = 0;
     //Find the head and tail spins of each loop
     for (int ispin=0; ispin!=2*N; ispin++){
         
@@ -388,18 +387,19 @@ void Replica::LoopPartition(){
         else         leg = last[ispin-N];
     
         //If the leg is inactive, the loop is trivial
-        if  (leg==-1) 
+        if  (leg==-1){ 
             if  (ispin<N){
                 nLoop += 1;
                 spinPart[ispin] = N+ispin;
                 spinPart[ispin+N] = ispin;
             }
             else continue;
+        }
     
         //Otherwise, follow links until we hit an edge leg
         else{
             //If the leg hasnt been assigned to a loop yet
-     //       cout << "spin: "<<setw(4)<<ispin<<" leg: "<<setw(4) << leg << endl;
+//            cout << endl << "spin: "<<setw(4)<<ispin<<" leg: "<<setw(4) << leg << endl;
             if  (find(lmLegs.begin(),lmLegs.end(),leg)==lmLegs.end()){
                 //Remove it from the list of unmarked legs
                 //Add it to the list of marked legs.
@@ -409,31 +409,46 @@ void Replica::LoopPartition(){
                 
                 //Construct a new loop 
                 nLoop += 1; 
-                counter = 0;
-                do {
-                //    counter += 1;   
-                //    if  (counter>10) exit(0); 
+
+                //First vertex move needs to be done out of loop
+                //since the last move must also be a vertex move 
+                p = (long) leg/4;   //index of the corresponding operator
+                leg = p*4 + SwitchLegDeter(leg%4,vtx[p]);  
+//                cout << "V switch: " << setw(4) << leg;
+
+                while (find(leLegs.begin(),leLegs.end(),leg)==leLegs.end()) {
+                   //Move to the leg it is connected to
+                   leg = links[leg];
+                   p   = (long) leg/4; 
+//                   cout << " L switch: " << setw(4) << leg << endl;
+
                     //Switch to another leg on the same vertex
                     p = (long) leg/4;   //index of the corresponding operator
                     leg = p*4 + SwitchLegDeter(leg%4,vtx[p]);  
-       //             cout << "V switch: " << setw(4) << leg;
-                    //If at this point we havent reached a leg at an edge
-                    if  (find(leLegs.begin(),leLegs.end(),leg)==leLegs.end()){
-                        //Move to the leg it is connected to
-                        leg = links[leg];
-                        p   = (long) leg/4; 
-         //               cout << " L switch: " << setw(4) << leg << endl;
-                      //  if  (leg==-1) exit(0);
-                    }
-                    //Else, stop loop construction
-                    else { 
-           //               cout <<  endl;  
-                          break;
-                        }
-
+//                    cout << "V switch: " << setw(4) << leg;
+                
                 //Stop if  we have reached a leg at an edge
-                }  while (find(leLegs.begin(),leLegs.end(),leg)==leLegs.end());
-            
+                }  
+//                cout << endl; 
+                //Construct a new loop 
+                        //nLoop += 1; 
+                        //do {
+                        //    //If at this point we havent reached a leg at an edge
+                        //    if  (find(leLegs.begin(),leLegs.end(),leg)==leLegs.end()){
+                        //        //Move to the leg it is connected to
+                        //        leg = links[leg];
+                        //        p   = (long) leg/4; 
+                        //        cout << " L switch: " << setw(4) << leg << endl;
+                        //      //  if  (leg==-1) exit(0);
+                        //    }
+                        //    //Else, stop loop construction
+                        //    else { 
+                        //          cout <<  endl;  
+                        //          break;
+                        //        }
+
+                        ////Stop if  we have reached a leg at an edge
+                        //}  while (find(leLegs.begin(),leLegs.end(),leg)==leLegs.end());
                 //Remove the end of the loop from the list of unmarked legs
                 //Add it to the list of marked legs.
                 leLegs.remove(leg); 
