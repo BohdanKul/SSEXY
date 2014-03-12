@@ -57,12 +57,13 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_maxSpin), RandomBase(seed)
     Debug         = false;
     Nloops        = 1;    
     nMeas         = 0;
-    binSize       = 100;
+    binSize       = 1000;
     saveFreq      = 1; 
     nSaved        = 0;
     maxLoopSize   = 2400000;
     SpinStiffness = 0;
-    ZRatio        = 0;
+    nAred         = 0;
+    nAext         = 0;
     measSS        = _measSS;
     measRatio     = not (_maxSpin<0);
 
@@ -84,29 +85,62 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_maxSpin), RandomBase(seed)
     
 
     //Initialize region A
-    Aregion = *_Aregion; 
-   
-    //Initialize region A's extension.
-    //It is always 8 consecutif spins 
-    //following the largest index spin in A.
+    Aregion = _Aregion; 
+  
+    //For ratio trick there are two regions A.
+    //Initialize them as well as their difference.
+    //Extensions are obtained by adding/substracting
+    //_incSpin number of spins from the largest spin 
+    //index in A.
     if  (measRatio){
-        Aextended = Aregion;
-        int offset = not(Aregion.empty());
+        Ared = *Aregion;   //Reduced A region
+        Aext = *Aregion;   //Extended A region
+        Adif = {};         //Their difference: elements contained in Aext that arent in Ared 
+        int offset = not(Aregion->empty());  //Required for a proper treatement for empty A 
         if  (_incSpin<0)
-            for (int i=0; i!=-_incSpin; i++)
-                Aextended.pop_back();
+            for (int i=0; i!=-_incSpin; i++){
+                Adif.push_back(Ared.back());
+                Ared.pop_back();
+            }
         else
-            for (int i=0; i!=_incSpin; i++)
-                Aextended.push_back(_maxSpin+offset+i);
+            for (int i=0; i!=_incSpin; i++){
+                Adif.push_back(_maxSpin+offset+i);
+                Aext.push_back(_maxSpin+offset+i);
+            }
     }
-            
+        
+    cout << "A" << endl;
+    for (auto spin=Aregion->begin(); spin!=Aregion->end(); spin++){
+        cout << *spin << ' ';
+    }
+    cout << endl;
  
-    //Write headers for a new estimator file
+    cout << "Ared" << endl;
+    for (auto spin=Ared.begin(); spin!=Ared.end(); spin++){
+        cout << *spin << ' ';
+    }
+    cout << endl;
+ 
+    cout << "Aext" << endl;
+    for (auto spin=Aext.begin(); spin!=Aext.end(); spin++){
+        cout << *spin << ' ';
+    }
+    cout << endl;
+ 
+    cout << "Adiff" << endl;
+    for (auto spin=Adif.begin(); spin!=Adif.end(); spin++){
+        cout << *spin << ' ';
+    }
+    cout << endl;
+ 
+   //Write headers for a new estimator file
     string eHeader;
     if (frName==""){
         eHeader = boost::str(boost::format("#%15s%16s%16s")%"nT"%"ET"%"Legs");
         if (measSS)    eHeader += boost::str(boost::format("%16s")%"SS");
-        if (measRatio) eHeader += boost::str(boost::format("%16s")%"ZRatio");
+        if (measRatio) eHeader += boost::str(boost::format("%16s")%"nAred");
+        if (measRatio) eHeader += boost::str(boost::format("%16s")%"nAext");
+
         *communicator.stream("estimator") << eHeader;    
 
 
@@ -153,119 +187,47 @@ int SSEXY::AdjustParameters()
 }
 
 
-/**************************************************************************
-*Get the next spin as determined by boundary condition (connected or not)
-***************************************************************************/
-int SSEXY::BCnextSpin(int sindex,int& replica, bool connected){
-
-    if (sindex<N) sindex +=N;
-    else          sindex -=N;
-    if  (connected)
-        replica = !replica;
-
-    return sindex;
-}    
 
 /**************************************************************************
-*Measure the number of distinct loops existing between 2 partitions when
-*their boundary condition are taken into account. 
+* Attemp to switch the size of region A based on the boundary conditions
 ***************************************************************************/
-long SSEXY::MeasureNLoop(vector<long>& BC){
-
-    
-    vector<vector<long>> Partitions;
-    Partitions.push_back(*(Replicas[0]->getPart()));
-    Partitions.push_back(*(Replicas[1]->getPart()));
-   
-    int i;
-    bool dDebug = true;
-    if  (Debug){
-        cout << endl << "Before connection=================================" << endl;
-        for (int r=0; r!=2; r++){
-            i=0;
-            for (auto spin=Partitions[r].begin(); spin!=Partitions[r].end(); spin++){
-                cout << setw(4) << *spin;
-                i += 1;
-                if  (i == N) cout << endl; 
-            }
-        cout << endl << endl;
-        }
-    }
-    int  replica;   
-    int  spin;
-    int  nspin;
-    bool connected;
-    long nLoop = 0;
-    int  ospin;
-    int  oreplica;
-    //Repeat for all edge spins in both replicas
-    for (auto oreplica=0; oreplica!=2; oreplica++){
-        for (auto ispin=0; ispin!=2*N; ispin++){
-            
-            //If the spin hasnt been visited
-            if  (Partitions[oreplica][ispin]!=-1){
-                //Follow the BC loop until it comes back to the initial spin
-                nLoop += 1;
-                ospin = ispin;
-                spin    = ospin;
-                replica = oreplica;
-                if (Debug) cout << "(r,s) = (" << replica << "," << spin << ")" << endl;
-                do{
-                    //Switch to the other end of the loop the spin belongs to
-                    nspin = Partitions[replica][spin];
-                    if (Debug) cout << "L: (r,s) = (" << replica << "," << nspin << ")" << endl;
-
-                    //Mark the visited spins
-                    Partitions[replica][spin]  = -1;
-                    Partitions[replica][nspin] = -1;
-                    
-                    //Switch to the spin connected by BC
-                    connected = not(find(BC.begin(),BC.end(),nspin%N)==BC.end());
-                    spin = BCnextSpin(nspin, replica, connected);       
-                    if (Debug) cout << "B: (r,s) = (" << replica << "," << spin << ")" << endl;
-
-
-                } while ((spin!=ospin) or (replica!=oreplica));
-                if  (Debug){
-                     for (int r=0; r!=2; r++){
-                         i=0;
-                         for (auto spin=Partitions[r].begin(); spin!=Partitions[r].end(); spin++){
-                             cout << setw(4) << *spin;
-                             i += 1;
-                             if  (i == N) cout << endl; 
-                         }
-                     cout << endl << endl;
-                     }
-                 }
+vector<long>* SSEXY::SwitchAregion()
+{
+    bool Switch = true;    
+    int  S0;
+    int  S1;
+    if  (Aregion == &Ared){
+        for (auto sindex=Adif.begin(); sindex!=Adif.end(); sindex++){
+            S0 = Replicas[1]->getSpin()->at(*sindex);
+            S1 = Replicas[0]->getTedge()->at(*sindex);
+            if  (S0!=S1){
+                Switch = false;
+                break;
             }
         }
-    }
-  
-    cout << "#Loops: " << nLoop << endl;
-    return nLoop; 
-}        
-
-
-/**************************************************************************
-* Measure Z[Aregion]/Z[Aextended], i.e. the ratio of modified part-
-*tion function connected at Aregion and the one connected at Aextended. 
-***************************************************************************/
-float SSEXY::MeasureZRatio(){
-    //Measure the number of loops formed in each
-    //modified geometry.
-    //When we call MeasureNLoop for the 2nd time,
-    //all necessary structures are already computed.
-    //That is why we need a special boolean flag in 
-    //order to reduce the computational effort.
-    long AnLoops  = MeasureNLoop(Aregion);
-    long EAnLoops = MeasureNLoop(Aextended);
-//    cout << "Ratio: " << (1.0*EAnLoops)/(1.0*AnLoops) << endl;
-    return pow(2,AnLoops-EAnLoops);
+        if  (Switch)
+            Aregion = &Aext;
+        }
+    else{
+        for (auto sindex=Adif.begin(); sindex!=Adif.end(); sindex++){
+            S0 = Replicas[0]->getSpin()->at(*sindex);
+            S1 = Replicas[0]->getTedge()->at(*sindex);
+            if  (S0!=S1){
+                Switch = false;
+                break;
+            }
+        } 
+        if  (Switch)
+            Aregion = &Ared;
+    }        
+    return Aregion; 
 }
         
 
-        
-//**************************************************************************
+/**************************************************************************
+* Perform measuements
+**************************************************************************/
+
 int SSEXY::Measure()
 {
     //Accumulate the new measurement
@@ -284,8 +246,10 @@ int SSEXY::Measure()
     
 
     //Accumulate the partition function ratio estimator
-    if (measRatio)
-        ZRatio += MeasureZRatio();
+    if  (measRatio)
+        if  (Aregion == &Ared) nAred += 1;
+        else                   nAext += 1; 
+    
     // If we've collected enough of measurements
     float E;
     long  TNLegs = 0;
@@ -307,8 +271,10 @@ int SSEXY::Measure()
 
         //Record partition function ratio if needed
         if (measRatio){
-           *communicator.stream("estimator") << boost::str(boost::format("%16.8E") %(1.0*ZRatio/(1.0*binSize)));
-           ZRatio = 0;
+           *communicator.stream("estimator") << boost::str(boost::format("%16.8E") %(1.0*nAred/(1.0*binSize)));
+           *communicator.stream("estimator") << boost::str(boost::format("%16.8E") %(1.0*nAext/(1.0*binSize)));
+           nAred = 0;
+           nAext = 0;
         }
 
        //Record energy of each replica
@@ -458,7 +424,6 @@ int SSEXY::MCstep()
         if  (Replicas[j]->DiagonalMove()==1)
             Replicas[j]->AdjustM();
         Replicas[j]->ConstructLinks();
-        Replicas[j]->LoopPartition();
         firsts[j] = Replicas[j]->getFirst();        
         lasts[j]  = Replicas[j]->getLast();        
         links[j]  = Replicas[j]->getLink();        
@@ -470,6 +435,9 @@ int SSEXY::MCstep()
             shifts[j] = shifts[j-1] + ns[j-1];
         nTotal   += ns[j];    
     } 
+    if  (measRatio){
+        Aregion = SwitchAregion();
+    }
     
    
     //----------------------------------------------------------------------        
@@ -502,7 +470,7 @@ int SSEXY::MCstep()
     int klast  = -1;
     for (int j=0; j!=firsts[0]->size(); j++){
         //If spin belongs to the region of interest
-        if  (find(Aregion.begin(),Aregion.end(),j)!=Aregion.end()){
+        if  (find(Aregion->begin(),Aregion->end(),j)!=Aregion->end()){
             //Connect replicas together
             kfirst = -1;
             klast  = -1;
@@ -599,7 +567,7 @@ int SSEXY::MCstep()
     bool previous;
     bool flipRand;
     for (long j=0; j!=firsts[0]->size(); j++){
-        if  (find(Aregion.begin(),Aregion.end(),j)!=Aregion.end()){
+        if  (find(Aregion->begin(),Aregion->end(),j)!=Aregion->end()){
             previous = false;
             flipRand = true;
             for (int k=0; k!=r; k++){

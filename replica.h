@@ -23,6 +23,7 @@ private:
     vector <vector<long>> sites; //Sites connected by bonds  
     vector <long> spins;                  //Spins array
     vector <long> ap;                     //Propagated spins state
+    vector <long> tedge;                //State of the top replica edge
 
     //Algorithmic variables
     int  id;                    
@@ -35,18 +36,12 @@ private:
     vector<long> last;          //for a particular spin site
     vector<long> links;         //Linked vertex list
     vector<long> vtx;           //Vertex type
-    vector<long> spinPart;      //Partion keeping the label of a loop
-                                //that a particular spin belongs to
-
  
    
     //Methods
     float BondDiagonalEnergy(long b);
     void  LatticeGeometry();
     long  VertexType(long oper);
-    long  SwitchLegDeter(long enLeg, long vtype);
-    long  ContinueStraight(long enLeg);
-    long  SwitchReverse(long enLeg);
 
 public:
 
@@ -55,7 +50,6 @@ public:
     long  MeasureMagnetization();
     float MeasureSpinStiffness();
 
-    void LoopPartition();
     void ConstructLinks();
     long DiagonalMove();
     void AdjustM();
@@ -67,7 +61,7 @@ public:
     vector<long>* getVtx()    {return &vtx;}
     vector<long>* getSpin()   {return &spins;}
     vector<long>* getOper()   {return &sm;}
-    vector<long>* getPart()   {return &spinPart;}
+    vector<long>* getTedge()  {return &tedge;}
     long          getn()      {return n;}
     long          getM()      {return M;}
     

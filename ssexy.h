@@ -26,6 +26,11 @@ class SSEXY: public RandomBase{
         float Beta;
         float T;
 
+        //Measurements
+        float SpinStiffness;
+        long  nAred;
+        long  nAext;
+        
         vector<Replica*> Replicas; 
         vector<vector<long>> sites;
         vector<vector<long>*> firsts ;
@@ -36,14 +41,14 @@ class SSEXY: public RandomBase{
         vector<vector<long>*> sms    ;
         
         vector<long> ap;
-        vector<long> Aregion;
-        vector<long> Aextended;
+        vector<long>* Aregion;
+        vector<long> Aext;
+        vector<long> Ared;
+        vector<long> Adif;
         vector<long> shifts;
         vector<long> ns;
         vector<long> Tns;
-        float SpinStiffness;
-        long ZRatio;
-        
+
         vector<long> NvisitedLegs;   //Number of visited legs per MC step
         vector<long> TNvisitedLegs;  //Accumulated number of visited legs per MC step
         vector<long> LINK; 
@@ -66,14 +71,13 @@ class SSEXY: public RandomBase{
         long SwitchContinue(long enLeg);
         pair<long,long> SwitchLeg(long leg, long vtype);
         int BCnextSpin(int sindex, int& replica,bool connected);
+        vector<long>* SwitchAregion();
 
     public:
        SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, bool _measSS, int _maxSpin, int _incSpin, string rfName, vector<long>* _Aregion); 
        int   AdjustParameters();
        int   MCstep(); 
        int   Measure(); 
-       long  MeasureNLoop(vector<long>& BC);
-       float MeasureZRatio(); 
        int   SaveState();
        int   LoadState();
 };
