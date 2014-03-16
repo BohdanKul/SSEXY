@@ -107,6 +107,7 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_maxSpin), RandomBase(seed)
                 Adif.push_back(_maxSpin+offset+i);
                 Aext.push_back(_maxSpin+offset+i);
             }
+        Aregion = &Ared;
     }
         
     cout << "A" << endl;
@@ -434,7 +435,8 @@ int SSEXY::MCstep()
         if (j>0)
             shifts[j] = shifts[j-1] + ns[j-1];
         nTotal   += ns[j];    
-    } 
+    }
+
     if  (measRatio){
         Aregion = SwitchAregion();
     }
@@ -843,6 +845,10 @@ int main(int argc, char *argv[])
     int maxSpin = -1;
     int incSpin = -1;
     if  (params.count("rtrick")){
+        if  (params["replica"].as<int>()!=2){
+            cout << "Error: ratio trick is compatible only with replica=2" << endl;
+            return 1;
+        }
         incSpin = params["rtrick"].as<int>();
         if  (Aregion.empty())
             maxSpin = 0;
