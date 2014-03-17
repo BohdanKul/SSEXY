@@ -1,6 +1,8 @@
 #include <iostream>
 #include <sstream>
 #include "ssexy.h"
+#include "lattice.h"
+#include "lattice.cpp"
 #include "replica.cpp"
 //#include "communicator.h"
 //#include "communicator.cpp"
@@ -16,8 +18,8 @@ namespace po = boost::program_options;
 
 
 //**************************************************************************
-SSEXY:: SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, bool _measSS, int _maxSpin, int _incSpin, string frName, vector<long>* _Aregion): 
-communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_maxSpin), RandomBase(seed)
+SSEXY:: SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, bool _measSS, int _Asize, string frName, vector<long>* _Ared, vector<long>* _Aext): 
+communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
 {
     long tmp[6][4] = {  {-1,-1,-1,-1},
                         { 1, 1, 1, 1},
@@ -65,7 +67,7 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_maxSpin), RandomBase(seed)
     nAred         = 0;
     nAext         = 0;
     measSS        = _measSS;
-    measRatio     = not (_maxSpin<0);
+    measRatio     = not (_Aext->empty());
 
     if (measSS)    cout << "Measuring spin stiffness" << endl;
     if (measRatio) cout << "Measuring Z ratio" << endl;
@@ -85,29 +87,21 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_maxSpin), RandomBase(seed)
     
 
     //Initialize region A
-    Aregion = _Aregion; 
+    Aregion = _Ared; 
   
     //For ratio trick there are two regions A.
-    //Initialize them as well as their difference.
-    //Extensions are obtained by adding/substracting
-    //_incSpin number of spins from the largest spin 
-    //index in A.
+    //Initialize them and their set  difference.
     if  (measRatio){
-        Ared = *Aregion;   //Reduced A region
-        Aext = *Aregion;   //Extended A region
-        Adif = {};         //Their difference: elements contained in Aext that arent in Ared 
-        int offset = not(Aregion->empty());  //Required for a proper treatement for empty A 
-        if  (_incSpin<0)
-            for (int i=0; i!=-_incSpin; i++){
-                Adif.push_back(Ared.back());
-                Ared.pop_back();
-            }
-        else
-            for (int i=0; i!=_incSpin; i++){
-                Adif.push_back(_maxSpin+offset+i);
-                Aext.push_back(_maxSpin+offset+i);
-            }
-        Aregion = &Ared;
+        Ared = *_Ared;   //Reduced A region
+        Aext = *_Aext;   //Extended A region
+        Adif = {};       //Their difference: elements contained in Aext that arent in Ared 
+        for (auto spin=Aext.begin(); spin!=Aext.end(); spin++)
+            if  (find(Ared.begin(),Ared.end(),*spin)==Ared.end())
+                Adif.push_back(*spin);
+        if  (Adif.empty()){
+            cout << "Error: region A and its extension are equal" << endl;
+            exit(0);
+        }
     }
         
     cout << "A" << endl;
@@ -763,9 +757,9 @@ int main(int argc, char *argv[])
             ("replica,r",    po::value<int>()->default_value(1),"number of replicas")
             ("measn,m",      po::value<long>(),"number of measurements to take")
             ("super,w",      "turn on the spin stifness measurement. \n(r must be set to 1)")
-            ("rtrick,t",     po::value<int>(), "The number of extra spins in an extended partition for ratio trick")
             ("state,s",      po::value<string>()->default_value(""),"path to the state file")
-            ("region_A,a",   po::value<string>()->default_value(""),"path to the file defining region A.  Equivalently, if set to an integer value,\nit defines the number of consecutif spins in region A. ");
+            ("rtrick,t",     po::value<string>()->default_value(""),"path to the file defining extended region A.\nEquivalently, the number of extra spins in an extended partition for ratio trick")
+            ("region_A,a",   po::value<string>()->default_value(""),"path to the file defining region A.\nEquivalently, if set to an integer value,it defines the number of consecutif spins in region A. ");
     po::store(po::parse_command_line(argc, argv, cmdLineOptions), params);
     po::notify(params);
 
@@ -799,67 +793,29 @@ int main(int argc, char *argv[])
         return 1; 
     }
 
-    vector<long> Aregion ={};  //Region A vector
-    if  (params["region_A"].as<string>()=="" ){
-        cout << "Taking A region to be empty" << endl;
-
-    }
-    // Load or generate region A
-    else{
-        char* end;
-        int Aspins = strtol(params["region_A"].as<string>().c_str(), &end, 10);
-        
-        //Generate region A
-        if  (!*end){
-            if  (Aspins>params["height"].as<int>()*params["width"].as<int>()){
-                cout << "Error: region A exceeds the size of the lattice" << endl;
-                return 1;
-            }
-            cout << "Automatic generation of region A containing " << Aspins << " spins" << endl;
-            for (int i=0; i!=Aspins; i++){
-               Aregion.push_back(i); 
-            }
-            }
-        //Load region A
-        else{
-            cout << "Loading A region from: " << params["region_A"].as<string>() << endl;        
-            ifstream RAfile (params["region_A"].as<string>());
-            string line;
-            string lline;
-            if  (RAfile.is_open()){
-                while (getline(RAfile,line))
-                      lline=line;
-                RAfile.close();
-                istringstream sline(lline.erase(0,1));
-                int n;
-                while (sline >> n)
-                    Aregion.push_back(n);
-            }
-            else{
-                cout << "Unable to process region A file" << endl;
-                return 1;
-                }    
-            }
+    // Attempt to define region A and its extension--------------------------------
+    
+    if  (params.count("region_A") and params.count("rtrick")){
+        char* endAred;
+        char* endAext;
+        int  sizeAred = strtol(params["region_A"].as<string>().c_str(), &endAred, 10);
+        int  sizeAext = strtol(params["rtrick"].as<string>().c_str(),   &endAext, 10);
+        if  ((!*endAred) xor (!*endAext)){
+            cout << "Error: when rtrick and region A are both specified, they must be specified via the same method (number or file)" << endl;
+            exit(0);
         }
+    } 
+    LATTICE Ared("A", params["region_A"].as<string>().c_str());
+    LATTICE Aext("A extended",  params["rtrick"].as<string>().c_str());
+  
+    //------------------------------------------------------------------------------
 
-    int maxSpin = -1;
-    int incSpin = -1;
-    if  (params.count("rtrick")){
-        if  (params["replica"].as<int>()!=2){
-            cout << "Error: ratio trick is compatible only with replica=2" << endl;
-            return 1;
-        }
-        incSpin = params["rtrick"].as<int>();
-        if  (Aregion.empty())
-            maxSpin = 0;
-        else
-            maxSpin = *max_element(Aregion.begin(),Aregion.end());
-    }
+
     SSEXY ssexy(params["replica"].as<int>(), params["width"].as<int>(),
                 params["height"].as<int>(),  params["temperature"].as<double>(), 
                 params["beta"].as<double>(), params["process_id"].as<int>(), 
-                params.count("super"),       maxSpin, incSpin, 
-                params["state"].as<string>(), &Aregion);  
+                params.count("super"),       Ared.getSize(),  
+                params["state"].as<string>(), Ared.getLattice(), Aext.getLattice());  
 
     cout << endl << "Equilibration stage" << endl << endl;
     

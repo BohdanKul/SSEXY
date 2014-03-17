@@ -74,7 +74,7 @@ class SSEXY: public RandomBase{
         vector<long>* SwitchAregion();
 
     public:
-       SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, bool _measSS, int _maxSpin, int _incSpin, string rfName, vector<long>* _Aregion); 
+       SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, bool _measSS, int _Asize, string rfName, vector<long>* _Areg, vector<long>* _Aext); 
        int   AdjustParameters();
        int   MCstep(); 
        int   Measure(); 
