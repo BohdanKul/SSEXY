@@ -56,7 +56,7 @@ def main():
         t,x   = sReduce.getrParams()
         y,dy  = sReduce.getAverages(args.estimator)
         #x     = 1.0/np.array(x)
-        errorbar(x, y, dy,\
+        errorbar(1/np.array(x), y, dy,\
                 marker='s',mec=colors[i],mfc=colors[i],color=colors[i],\
                 ls='-',capsize=4,label=r'$\mathrm{%s}$' %sReduce.getTupleIdstr(order))
 
