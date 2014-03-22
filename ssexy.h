@@ -28,6 +28,7 @@ class SSEXY: public RandomBase{
 
         //Measurements
         float SpinStiffness;
+        float ZRatio;
         long  nAred;
         long  nAext;
         
@@ -60,6 +61,7 @@ class SSEXY: public RandomBase{
         long saveFreq;
         long nSaved; 
         bool Debug;
+        bool DebugSRT;
 
         //File management
         Communicator communicator;
@@ -72,9 +74,12 @@ class SSEXY: public RandomBase{
         pair<long,long> SwitchLeg(long leg, long vtype);
         int BCnextSpin(int sindex, int& replica,bool connected);
         vector<long>* SwitchAregion();
+        
+        float MeasureZRatio();
+        long  MeasureNLoop(vector<long>& BC);
 
     public:
-       SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, bool _measSS, int _Asize, string rfName, vector<long>* _Areg, vector<long>* _Aext); 
+       SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, bool _measSS, int _Asize, string rfName, vector<long>* _Anor, vector<long>* _Ared, vector<long>* _Aext); 
        int   AdjustParameters();
        int   MCstep(); 
        int   Measure(); 

@@ -44,6 +44,7 @@ Replica::Replica(unsigned short _Nx, unsigned short _Ny, float _T, long seed, in
 
    //Initialize spins
     spins.resize(N,0);
+    spinPart.resize(2*N, -1);
     for (vector<long>::iterator spin=spins.begin(); spin!=spins.end(); spin++) {
         *spin = pow(-1,uRandInt()%2);
     }
@@ -348,7 +349,7 @@ void Replica::LoopPartition(){
         }
         spin += 1;
     }
-    cout << endl;
+    //cout << endl;
     //Continue the filling with the 2nd edge legs
     for (auto leg=last.begin(); leg!=last.end(); leg++){
 //        cout << setw(4) << *leg;
