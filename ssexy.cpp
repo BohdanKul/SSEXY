@@ -181,7 +181,149 @@ int SSEXY::AdjustParameters()
     }
 }
 
+int SSEXY::AdjustParameters()
+{
+    long Tn;    //Cummulative n
+    long TLegs; //Cummulative Legs
+    Tn    = 0;
+    TLegs = 0;
 
+    //Run simulation without recording results
+    for (int i=0; i!=100; i++){
+        //Perform a Monte-Carlo step
+        MCstep();
+        //Accumulate M's
+        for (int j=0; j!=r; j++)
+            Tn += Replicas[j]->getn();
+        //Accumulate legs 
+        for (int j=0; j!=Nloops; j++)
+            TLegs += NvisitedLegs[j];
+    } 
+    
+    //Increase Nloops if not enough legs
+    // are being generated
+    if  (TLegs > 2*Tn)
+        return 0;
+    else{
+        Nloops += 1;
+        NvisitedLegs.resize(Nloops,0);
+        TNvisitedLegs.resize(Nloops,0);
+        cout << SSEXID << ": Legs = " << TLegs/100.0 << " 2xnT = " << Tn*2/100.0 << endl;
+        cout << SSEXID << ": Increase # of loops to " << Nloops << endl;
+        return 1;
+    }
+}
+
+
+/**************************************************************************
+*Get the next spin as determined by boundary condition (connected or not)
+***************************************************************************/
+int SSEXY::BCnextSpin(int sindex,int& replica, bool connected){
+
+    if (sindex<N) sindex +=N;
+    else          sindex -=N;
+    if  (connected)
+        replica = !replica;
+
+    return sindex;
+}    
+
+/**************************************************************************
+*Measure the number of distinct loops existing between 2 partitions when
+*their boundary condition are taken into account. 
+***************************************************************************/
+long SSEXY::MeasureNLoop(vector<long>& BC){
+
+    
+    vector<vector<long>> Partitions;
+    Partitions.push_back(*(Replicas[0]->getPart()));
+    Partitions.push_back(*(Replicas[1]->getPart()));
+   
+    int i;
+    bool dDebug = true;
+    if  (Debug){
+        cout << endl << "Before connection=================================" << endl;
+        for (int r=0; r!=2; r++){
+            i=0;
+            for (auto spin=Partitions[r].begin(); spin!=Partitions[r].end(); spin++){
+                cout << setw(4) << *spin;
+                i += 1;
+                if  (i == N) cout << endl; 
+            }
+        cout << endl << endl;
+        }
+    }
+    int  replica;   
+    int  spin;
+    int  nspin;
+    bool connected;
+    long nLoop = 0;
+    int  ospin;
+    int  oreplica;
+    //Repeat for all edge spins in both replicas
+    for (auto oreplica=0; oreplica!=2; oreplica++){
+        for (auto ispin=0; ispin!=2*N; ispin++){
+            
+            //If the spin hasnt been visited
+            if  (Partitions[oreplica][ispin]!=-1){
+                //Follow the BC loop until it comes back to the initial spin
+                nLoop += 1;
+                ospin = ispin;
+                spin    = ospin;
+                replica = oreplica;
+                if (Debug) cout << "(r,s) = (" << replica << "," << spin << ")" << endl;
+                do{
+                    //Switch to the other end of the loop the spin belongs to
+                    nspin = Partitions[replica][spin];
+                    if (Debug) cout << "L: (r,s) = (" << replica << "," << nspin << ")" << endl;
+
+                    //Mark the visited spins
+                    Partitions[replica][spin]  = -1;
+                    Partitions[replica][nspin] = -1;
+                    
+                    //Switch to the spin connected by BC
+                    connected = not(find(BC.begin(),BC.end(),nspin%N)==BC.end());
+                    spin = BCnextSpin(nspin, replica, connected);       
+                    if (Debug) cout << "B: (r,s) = (" << replica << "," << spin << ")" << endl;
+
+
+                } while ((spin!=ospin) or (replica!=oreplica));
+                if  (Debug){
+                     for (int r=0; r!=2; r++){
+                         i=0;
+                         for (auto spin=Partitions[r].begin(); spin!=Partitions[r].end(); spin++){
+                             cout << setw(4) << *spin;
+                             i += 1;
+                             if  (i == N) cout << endl; 
+                         }
+                     cout << endl << endl;
+                     }
+                 }
+            }
+        }
+    }
+  
+    cout << "#Loops: " << nLoop << endl;
+    return nLoop; 
+}        
+
+
+/**************************************************************************
+* Measure Z[Aregion]/Z[Aextended], i.e. the ratio of modified part-
+*tion function connected at Aregion and the one connected at Aextended. 
+***************************************************************************/
+float SSEXY::MeasureZRatio(){
+    //Measure the number of loops formed in each
+    //modified geometry.
+    //When we call MeasureNLoop for the 2nd time,
+    //all necessary structures are already computed.
+    //That is why we need a special boolean flag in 
+    //order to reduce the computational effort.
+    long AnLoops  = MeasureNLoop(Aregion);
+    long EAnLoops = MeasureNLoop(Aextended);
+//    cout << "Ratio: " << (1.0*EAnLoops)/(1.0*AnLoops) << endl;
+    return pow(2,AnLoops-EAnLoops);
+}
 
 /**************************************************************************
 * Attemp to switch the size of region A based on the boundary conditions
