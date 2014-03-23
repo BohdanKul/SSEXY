@@ -149,7 +149,7 @@ def main():
         sys.exit()
 
     # We first reduce the scalar estimators and output them to disk
-    head1,scAve1,scErr1 = getScalarEst('estimator',ssexy,outName,options.reduce)
+    head1,scAve1,scErr1 = getScalarEst('estimator',ssexy,outName,options.reduce, options.skip)
     if options.plot:
         if  not(options.plot in head1):
             print "Incorrect estimator to plot. Choose among: "
