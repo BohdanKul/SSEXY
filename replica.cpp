@@ -290,4 +290,184 @@ void Replica::ConstructLinks()
 
     }
     tedge = ap;
+}
+
+
+
+long Replica::ContinueStraight(long enLeg){
+    return enLeg - sgn(enLeg-2)*(1-(sgn((enLeg%3)-1)-1));
+}
+
+long Replica::SwitchReverse(long enLeg){
+    return enLeg - sgn(enLeg%2-1);
+
+}/**************************************************************
+* Switch leg deterministically for the loop construction
+**************************************************************/
+long Replica::SwitchLegDeter(long enLeg, long vtype){
+    
+    //Go straight if it is type 1 vertex
+    if  (vtype<3){
+        //cout << "type: " << setw(4) << vtype << " leg: " << setw(4) << enLeg << endl;
+        return ContinueStraight(enLeg);
+    }
+    //Switch and reverse if it type 2 vertex
+    else{
+        return SwitchReverse(enLeg);
+    }
+}
+
+
+
+    
+/**************************************************************
+* Partition edge spins based on the loop they belong to. 
+**************************************************************/
+void Replica::LoopPartition(){
+
+    //Reset the main datastructure    
+    fill(spinPart.begin(),spinPart.end(),-1);
+
+
+    //A map from edge legs to spins they are associated with.
+    //In order to distinguish the upper and lower edge spins,
+    //spin index on the upper edge is shifted by the number of spins.
+    map<long,int> LegToSpin;
+
+    //List of unmarked edge legs
+    list<long> leLegs;
+
+    //Fill the map and the list
+    int spin = 0;
+//    cout << endl << "Before partitionning-------------------------------" << endl;
+    for (auto leg=first.begin(); leg!=first.end(); leg++){
+//        cout << setw(4) << *leg;
+        if  (*leg!=-1){
+            LegToSpin[*leg] = spin;
+            leLegs.push_back(*leg);
+        }
+        spin += 1;
+    }
+    cout << endl;
+    //Continue the filling with the 2nd edge legs
+    for (auto leg=last.begin(); leg!=last.end(); leg++){
+//        cout << setw(4) << *leg;
+        if  (*leg!=-1){
+            LegToSpin[*leg] = spin;
+            leLegs.push_back(*leg);
+        }
+        spin += 1;
+    }
+//    cout << endl;
+
+    //spin = 0;
+    //for (auto link=links.begin(); link!=links.end(); link++){
+    //    cout <<setw(4) << spin<<": "<< setw(4) << *link << " ";
+    //    if (spin%5==0) cout << endl;
+    //    spin +=1;
+    //}
+    //cout << endl << "Links size: " << links.size() <<endl;
+    
+//Complimentary to the leLegs list, this list contains 
+    //already marked legs
+    list<long> lmLegs;
+    
+    
+    long p;          //Operator index
+    long leg;        //Leg index
+    long nLoop = 0;  //Number of constructed loops
+
+    //Find the head and tail spins of each loop
+    for (int ispin=0; ispin!=2*N; ispin++){
+        
+        //cout << "new spin: " << ispin << endl; 
+        //Get the leg associated with the spin
+        if (ispin<N) leg = first[ispin];
+        else         leg = last[ispin-N];
+    
+        //If the leg is inactive, the loop is trivial
+        if  (leg==-1){ 
+            if  (ispin<N){
+                nLoop += 1;
+                spinPart[ispin] = N+ispin;
+                spinPart[ispin+N] = ispin;
+            }
+            else continue;
+        }
+    
+        //Otherwise, follow links until we hit an edge leg
+        else{
+            //If the leg hasnt been assigned to a loop yet
+//            cout << endl << "spin: "<<setw(4)<<ispin<<" leg: "<<setw(4) << leg << endl;
+            if  (find(lmLegs.begin(),lmLegs.end(),leg)==lmLegs.end()){
+                //Remove it from the list of unmarked legs
+                //Add it to the list of marked legs.
+                leLegs.remove(leg); 
+                lmLegs.push_back(leg);
+ 
+                
+                //Construct a new loop 
+                nLoop += 1; 
+
+                //First vertex move needs to be done out of loop
+                //since the last move must also be a vertex move 
+                p = (long) leg/4;   //index of the corresponding operator
+                leg = p*4 + SwitchLegDeter(leg%4,vtx[p]);  
+//                cout << "V switch: " << setw(4) << leg;
+
+                while (find(leLegs.begin(),leLegs.end(),leg)==leLegs.end()) {
+                   //Move to the leg it is connected to
+                   leg = links[leg];
+                   p   = (long) leg/4; 
+//                   cout << " L switch: " << setw(4) << leg << endl;
+
+                    //Switch to another leg on the same vertex
+                    p = (long) leg/4;   //index of the corresponding operator
+                    leg = p*4 + SwitchLegDeter(leg%4,vtx[p]);  
+//                    cout << "V switch: " << setw(4) << leg;
+                
+                //Stop if  we have reached a leg at an edge
+                }  
+//                cout << endl; 
+                //Construct a new loop 
+                        //nLoop += 1; 
+                        //do {
+                        //    //If at this point we havent reached a leg at an edge
+                        //    if  (find(leLegs.begin(),leLegs.end(),leg)==leLegs.end()){
+                        //        //Move to the leg it is connected to
+                        //        leg = links[leg];
+                        //        p   = (long) leg/4; 
+                        //        cout << " L switch: " << setw(4) << leg << endl;
+                        //      //  if  (leg==-1) exit(0);
+                        //    }
+                        //    //Else, stop loop construction
+                        //    else { 
+                        //          cout <<  endl;  
+                        //          break;
+                        //        }
+
+                        ////Stop if  we have reached a leg at an edge
+                        //}  while (find(leLegs.begin(),leLegs.end(),leg)==leLegs.end());
+                //Remove the end of the loop from the list of unmarked legs
+                //Add it to the list of marked legs.
+                leLegs.remove(leg); 
+                lmLegs.push_back(leg); 
+                //if  (leg!=-1){
+                //    leLegs.remove(leg); 
+                //    lmLegs.push_back(leg); 
+                //}
+            
+                //Store loop's head and tail spins.
+                spinPart[ispin] = LegToSpin[leg]; 
+                spinPart[LegToSpin[leg]] = ispin; 
+            }
+        }
+    }            
+//    int i = 0; 
+//    for (auto spin=spinPart.begin(); spin!=spinPart.end(); spin++){
+//        cout << setw(4) << *spin;
+//        i += 1;
+//        if  (i == N) cout << endl; 
+//    }
+//    cout << endl;
 } 

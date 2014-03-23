@@ -48,6 +48,8 @@ class Annotate(object):
         plt.connect('key_press_event',self.on_keypress)
 
     def on_keypress(self,event):
+        
+        #Save region A
         if  event.key == 'a':
             footer = "\n"
             for i in range(self.Ny):
@@ -60,9 +62,42 @@ class Annotate(object):
             else:
                 print "No storage file specified"
 
-        if event.key == 'q': 
-		window.close()
+        #Close window
+        if  event.key == 'q': 
+	    window.close()
 
+        #Save regions A by increment 
+        if  event.key == 't': 
+            tfiles = []
+            (lastx,lasty) = (-1,-1)
+            counter   = 0 
+            increment = 1
+            tState  = np.zeros((self.Ny,self.Nx),dtype=bool)
+            tfooter = "\n" 
+            mainPart = self.sfname.split('.')[0]
+            saveas = mainPart+('_a-%03d' %counter)+'.dat'
+            tfiles.append(saveas)
+            np.savetxt(saveas, tState, fmt="%i",header="Nx=%i\nNy=%i\n" %(self.Nx,self.Ny),footer=tfooter) 
+            print "Saved to: ",saveas 
+            for m in range(self.Ny):
+                for n in range(self.Nx):
+                    for i in range(m,self.Ny):
+                        for j in range(self.Nx)[::-1]:
+                            if  self.State[i,j]:
+                                if  (j<lastx) or (i>lasty):
+                                    (lastx,lasty) = (j,i)
+                                    counter += 1
+                                    tfooter += str(j+i*self.Nx)+" "
+                                    tState[i,j]   = True
+                                    if  (counter%increment == 0):
+                                        mainPart = self.sfname.split('.')[0]
+                                        saveas = mainPart+('_a-%03d' %counter)+'.dat'
+                                        np.savetxt(saveas, tState, fmt="%i",header="Nx=%i\nNy=%i\n" %(self.Nx,self.Ny),footer=tfooter) 
+                                        print "Saved to: ",saveas 
+                                        tfiles.append(saveas)
+            print "Generated files: "
+            print ' '.join(tfiles[:-1])
+            print ' '.join(tfiles[1:])
     def DrawState(self):
         for y in range(self.Ny):
             for x in range(self.Nx):
