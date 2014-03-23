@@ -37,6 +37,7 @@ def getParamMap(fname):
               'y'     : int(fileParts[3])}
     if 't' in fileParts[4]: params['T']    = float(fileParts[4][1:])
     else:                   params['b']    = float(fileParts[4][1:])
+    if int(fileParts[5]) < 10000: params['a'] = int(fileParts[5])
     return params 
 
 ##---------------------------------------------------------------------------
