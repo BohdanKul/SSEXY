@@ -3,6 +3,8 @@
  
 #include "stdlib.h"
 #include <vector>
+#include <set>
+#include <map>
 using namespace std;
 
 //**************************************************************************
@@ -24,7 +26,16 @@ vector<long> MergeVectors(vector<vector<long>*> vectors){
     }
     return merged;
 }
+
 //**************************************************************************
+
+long GetConnectedSubraph(map<long,set<long>>& graph, set<long>& path,long cpos){
+
+    path.insert(cpos);
+    for (auto npos=graph[cpos].begin(); npos!=graph[cpos].end(); npos++)
+        if  (not path.count(*npos))
+            GetConnectedSubraph(graph,path,*npos);
+}
 
 long sgn(long val) {
     return ((0<=val) - (val<0));

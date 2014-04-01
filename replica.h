@@ -55,7 +55,7 @@ public:
     long  MeasureMagnetization();
     float MeasureSpinStiffness();
 
-    void LoopPartition();
+    void GetDeterministicLinks();
     void ConstructLinks();
     long DiagonalMove();
     void AdjustM();

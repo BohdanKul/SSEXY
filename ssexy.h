@@ -3,6 +3,8 @@
 #include "randombase.h"
 #include "replica.h"
 #include <vector>
+#include <set>
+#include <map>
 using namespace std;
 
 
@@ -28,7 +30,7 @@ class SSEXY: public RandomBase{
 
         //Measurements
         float SpinStiffness;
-        float ZRatio;
+        float LRatio;
         long  nAred;
         long  nAext;
         
@@ -54,6 +56,7 @@ class SSEXY: public RandomBase{
         vector<long> TNvisitedLegs;  //Accumulated number of visited legs per MC step
         vector<long> LINK; 
         vector<long> VTX; 
+        vector<vector<long>> Partitions;
 
         long LegSpin[6][4];
         long nTotal;
@@ -75,8 +78,10 @@ class SSEXY: public RandomBase{
         int BCnextSpin(int sindex, int& replica,bool connected);
         vector<long>* SwitchAregion();
         
-        float MeasureZRatio();
-        long  MeasureNLoop(vector<long>& BC);
+        float ALRTrick();
+        float ILRTrick();
+        long  LoopPartition(vector<long>& BC);
+        //long  GetConnectedSubraph(map<long,set<long>>& graph, set<long>& path,long cpos);
 
     public:
        SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, bool _measSS, int _Asize, string rfName, vector<long>* _Anor, vector<long>* _Ared, vector<long>* _Aext); 

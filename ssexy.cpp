@@ -1,5 +1,7 @@
 #include <iostream>
 #include <sstream>
+#include <map>
+#include <set>
 #include "ssexy.h"
 #include "lattice.h"
 #include "lattice.cpp"
@@ -58,12 +60,12 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
     //Load replicas' datastructures if needed
     if (frName!="") LoadState();
     
-    Debug         = false;
+    Debug         = true;
     DebugSRT      = false;
     Nloops        = 1;    
     nMeas         = 0;
     if  (DebugSRT) binSize = 1000;
-    else           binSize = 100;
+    else           binSize = 1;
     saveFreq      = 1; 
     nSaved        = 0;
     maxLoopSize   = 2400000;
@@ -88,7 +90,7 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
     NvisitedLegs.resize(Nloops,0);
     TNvisitedLegs.resize(Nloops,0);
     Tns.resize(r+1,0);              //+1 is for the totals
-    
+    Partitions.clear(); 
 
     //Initialize region A
     Aregion = _Anor; 
@@ -99,9 +101,19 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
         Ared = *_Ared;   //Reduced A region
         Aext = *_Aext;   //Extended A region
         Adif = {};       //Their difference: elements contained in Aext that arent in Ared 
-        for (auto spin=Aext.begin(); spin!=Aext.end(); spin++)
-            if  (find(Ared.begin(),Ared.end(),*spin)==Ared.end())
-                Adif.push_back(*spin);
+        if  (Aext.size()>Ared.size()){
+            for (auto spin=Aext.begin(); spin!=Aext.end(); spin++){
+                if  (find(Ared.begin(),Ared.end(),*spin)==Ared.end())
+                    Adif.push_back(*spin);
+                }
+            }
+        else{
+            for (auto spin=Ared.begin(); spin!=Ared.end(); spin++){
+                if  (find(Aext.begin(),Aext.end(),*spin)==Aext.end())
+                    Adif.push_back(*spin);
+                }
+            }
+            
         if  (Adif.empty()){
             cout << "Error: region A and its extension are equal" << endl;
             exit(0);
@@ -142,7 +154,7 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
             if (measRatio) eHeader += boost::str(boost::format("%16s")%"nAext");
         }
         else
-            if (measRatio) eHeader += boost::str(boost::format("%16s")%"ZRatio");
+            if (measRatio) eHeader += boost::str(boost::format("%16s")%"LRatio");
         *communicator.stream("estimator") << eHeader;    
 
 
@@ -207,10 +219,9 @@ int SSEXY::BCnextSpin(int sindex,int& replica, bool connected){
 *Measure the number of distinct loops existing between 2 partitions when
 *their boundary condition are taken into account. 
 ***************************************************************************/
-long SSEXY::MeasureNLoop(vector<long>& BC){
+long SSEXY::LoopPartition(vector<long>& BC){
 
-    
-    vector<vector<long>> Partitions;
+    Partitions.clear(); 
     Partitions.push_back(*(Replicas[0]->getPart()));
     Partitions.push_back(*(Replicas[1]->getPart()));
    
@@ -239,7 +250,7 @@ long SSEXY::MeasureNLoop(vector<long>& BC){
         for (auto ispin=0; ispin!=2*N; ispin++){
             
             //If the spin hasnt been visited
-            if  (Partitions[oreplica][ispin]!=-1){
+            if  (not(Partitions[oreplica][ispin]<0)){
                 //Follow the BC loop until it comes back to the initial spin
                 nLoop += 1;
                 ospin = ispin;
@@ -251,9 +262,10 @@ long SSEXY::MeasureNLoop(vector<long>& BC){
                     nspin = Partitions[replica][spin];
                     if (Debug) cout << "L: (r,s) = (" << replica << "," << nspin << ")" << endl;
 
-                    //Mark the visited spins
-                    Partitions[replica][spin]  = -1;
-                    Partitions[replica][nspin] = -1;
+                    //Mark the visited spins by the negative 
+                    //of the loop index that they belong to
+                    Partitions[replica][spin]  = -nLoop;
+                    Partitions[replica][nspin] = -nLoop;
                     
                     //Switch to the spin connected by BC
                     connected = not(find(BC.begin(),BC.end(),nspin%N)==BC.end());
@@ -286,18 +298,89 @@ long SSEXY::MeasureNLoop(vector<long>& BC){
 * Measure Z[Aregion]/Z[Aextended], i.e. the ratio of modified part-
 *tion function connected at Aregion and the one connected at Aextended. 
 ***************************************************************************/
-float SSEXY::MeasureZRatio(){
+float SSEXY::ALRTrick(){
     //Measure the number of loops formed in each
     //modified geometry.
     //When we call MeasureNLoop for the 2nd time,
     //all necessary structures are already computed.
     //That is why we need a special boolean flag in 
     //order to reduce the computational effort.
-    long AnLoops  = MeasureNLoop(Ared);
-    long EAnLoops = MeasureNLoop(Aext);
+    long AnLoops  = LoopPartition(Ared);
+    long EAnLoops = LoopPartition(Aext);
 //    cout << "Ratio: " << (1.0*EAnLoops)/(1.0*AnLoops) << endl;
     return pow(2,AnLoops-EAnLoops);
 }
+
+
+/**************************************************************************
+* Attemp to switch the size of region A based on the boundary conditions
+***************************************************************************/
+float SSEXY::ILRTrick(){
+
+    //Partition edge spins according to the loops they belong to
+    LoopPartition(Ared);
+
+    bool lDebug = true;
+    long downLoop;
+    long upLoop;
+    vector<long> twoLoops (2,0);
+    map<long, set<long>> ConnectedLoops;
+    set<long> AllLoops;
+    //Merge loops that share common spins from Adif
+    for (auto ADspin=Adif.begin(); ADspin!=Adif.end(); ADspin++){
+        //If region A is increased, BCs exist between replicas 
+        if  (Ared.size()<Aext.size()){    
+            twoLoops[0] = Partitions[0][*ADspin]; 
+            twoLoops[1] = Partitions[1][*ADspin+N]; 
+        }
+        //If region A is decreased, BCs exist within replicas
+        else{
+            twoLoops[0] = Partitions[0][*ADspin]; 
+            twoLoops[1] = Partitions[0][*ADspin+N]; 
+        }
+
+        //Create a map of loop connections. 
+        //Key = loop index, value = set of connected loops
+        for (int i=0; i!=2; i++){
+            downLoop = twoLoops[i];
+            upLoop   = twoLoops[(i+1)%2];
+            if  (not ConnectedLoops.count(downLoop)){
+                set<long> lvalue {upLoop};  
+                ConnectedLoops[downLoop] =lvalue; 
+                AllLoops.insert(downLoop);
+            }
+            else
+                ConnectedLoops[downLoop].insert(upLoop);
+            }
+    }
+
+    long L0 = AllLoops.size();
+    long Ls = 0;
+
+    set<long> MarkedLoops; 
+    set<long> path;
+
+    if  (lDebug) cout << "Paths: " << endl;
+
+    for (auto loop=AllLoops.begin(); loop!=AllLoops.end(); loop++)
+        if  (not MarkedLoops.count(*loop)){
+            GetConnectedSubraph(ConnectedLoops, path, *loop);
+            for (auto mloop=path.begin(); mloop!=path.end(); mloop++){
+                MarkedLoops.insert(*mloop);
+                if  (lDebug) cout << *mloop << " ";
+            if  (lDebug) cout << endl;
+            }
+
+            path.clear();  
+            Ls += 1;
+        }          
+
+    if  (lDebug) cout << "Ls = " << Ls << " L0 = " << L0 << endl;
+
+    return pow(2,Ls-L0);
+            
+}
+
 
 /**************************************************************************
 * Attemp to switch the size of region A based on the boundary conditions
@@ -363,7 +446,7 @@ int SSEXY::Measure()
             else                   nAext += 1; 
         }
         else
-            ZRatio += MeasureZRatio();
+            LRatio += ILRTrick();
     
     // If we've collected enough of measurements
     float E;
@@ -393,8 +476,8 @@ int SSEXY::Measure()
                nAext = 0;
             }
             else{
-                *communicator.stream("estimator") << boost::str(boost::format("%16.8E") %(1.0*ZRatio/(1.0*binSize)));
-                ZRatio = 0;
+                *communicator.stream("estimator") << boost::str(boost::format("%16.8E") %(1.0*LRatio/(1.0*binSize)));
+                LRatio = 0;
             }
         }
 
@@ -546,7 +629,7 @@ int SSEXY::MCstep()
             Replicas[j]->AdjustM();
         Replicas[j]->ConstructLinks();
         if  (measRatio and not(DebugSRT))
-            Replicas[j]->LoopPartition();
+            Replicas[j]->GetDeterministicLinks();
         firsts[j] = Replicas[j]->getFirst();        
         lasts[j]  = Replicas[j]->getLast();        
         links[j]  = Replicas[j]->getLink();        
@@ -980,7 +1063,7 @@ int main(int argc, char *argv[])
     }
         
     cout << endl << "Measurement stage" << endl << endl;
-    for (long i=0; i!=100*params["measn"].as<long>(); i++){
+    for (long i=0; i!=1*params["measn"].as<long>(); i++){
         ssexy.MCstep();
         ssexy.Measure();
     }

@@ -324,7 +324,7 @@ long Replica::SwitchLegDeter(long enLeg, long vtype){
 /**************************************************************
 * Partition edge spins based on the loop they belong to. 
 **************************************************************/
-void Replica::LoopPartition(){
+void Replica::GetDeterministicLinks(){
 
     //Reset the main datastructure    
     fill(spinPart.begin(),spinPart.end(),-1);
