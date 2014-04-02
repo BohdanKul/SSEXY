@@ -65,7 +65,7 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
     DebugILRT     = true;
     Nloops        = 1;    
     nMeas         = 0;
-    if  (DebugSRT) binSize = 100;
+    if  (DebugSRT) binSize = 1000;
     else           binSize = 1000;
     saveFreq      = 1; 
     nSaved        = 0;
@@ -178,7 +178,7 @@ int SSEXY::AdjustParameters()
     //Run simulation without recording results
     for (int i=0; i!=100; i++){
         //Perform a Monte-Carlo step
-        MCstep(0);
+        MCstep();
         //Accumulate M's
         for (int j=0; j!=r; j++)
             Tn += Replicas[j]->getn();
@@ -634,7 +634,7 @@ int SSEXY::LoadState(){
 
         
 //**************************************************************************
-int SSEXY::MCstep(long step)
+int SSEXY::MCstep()
 {
 
     //----------------------------------------------------------------------        
@@ -643,9 +643,8 @@ int SSEXY::MCstep(long step)
     //----------------------------------------------------------------------        
     nTotal = 0;
     for (int j=0; j!=r; j++){
-        if  (step%1000 == 0)
-            if  (Replicas[j]->DiagonalMove()==1)
-                Replicas[j]->AdjustM();
+        if  (Replicas[j]->DiagonalMove()==1)
+            Replicas[j]->AdjustM();
         Replicas[j]->ConstructLinks();
         if  (measRatio and DebugILRT)
             Replicas[j]->GetDeterministicLinks();
@@ -1083,7 +1082,7 @@ int main(int argc, char *argv[])
         
     cout << endl << "Measurement stage" << endl << endl;
     for (long i=0; i!=1000*params["measn"].as<long>(); i++){
-        ssexy.MCstep(i);
+        ssexy.MCstep();
         ssexy.Measure();
     }
     return 0;
