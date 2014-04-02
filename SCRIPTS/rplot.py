@@ -15,7 +15,7 @@ from matplotlib.ticker import MultipleLocator
 # -----------------------------------------------------------------------------
 def main():
 
-    order = ['Lx','Ly','T','b','r', 'full','half']
+    order = ['Set','Lx','Ly','T','b','r', 'full','half', 'Ar', 'Ae']
 
     parser = OptionParser() 
     parser = argparse.ArgumentParser(description='Plot Raw MC Equilibration Data for Scalar Estimators.')
@@ -56,12 +56,14 @@ def main():
         t,x   = sReduce.getrParams()
         y,dy  = sReduce.getAverages(args.estimator)
         #x     = 1.0/np.array(x)
-        errorbar(1/np.array(x), y, dy,\
+        print sReduce.paramMap
+        if  args.estimator=='SS':
+            x = 1.0/np.array(x)
+        errorbar(x, y, dy,\
                 marker='s',mec=colors[i],mfc=colors[i],color=colors[i],\
-                ls='-',capsize=4,label=r'$\mathrm{%s}$' %sReduce.getTupleIdstr(order))
-
+                ls='',capsize=4,label=r'$\mathrm{%s}$' %sReduce.getTupleIdstr(order))
     if  args.estimator=='SS':
-        plot([0,max(x)],[2.0/np.pi*0,2.0/np.pi*max(x)], 
+        plot([0,1],[2.0/np.pi*0,2.0/np.pi*1], 
              label=r'$\mathrm{Magic \, line}$')
     xlabel(r'$\mathrm{%s}$' %rvariable)
     ylabel(r'$\mathrm{%s}$' %args.estimator)
