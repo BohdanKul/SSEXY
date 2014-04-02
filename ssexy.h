@@ -65,6 +65,7 @@ class SSEXY: public RandomBase{
         long nSaved; 
         bool Debug;
         bool DebugSRT;
+        bool DebugILRT;
 
         //File management
         Communicator communicator;
@@ -86,7 +87,7 @@ class SSEXY: public RandomBase{
     public:
        SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, bool _measSS, int _Asize, string rfName, vector<long>* _Anor, vector<long>* _Ared, vector<long>* _Aext); 
        int   AdjustParameters();
-       int   MCstep(); 
+       int   MCstep(long step); 
        int   Measure(); 
        int   SaveState();
        int   LoadState();

@@ -61,10 +61,11 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
     if (frName!="") LoadState();
     
     Debug         = false;
-    DebugSRT      = false;
+    DebugSRT      = true;
+    DebugILRT     = true;
     Nloops        = 1;    
     nMeas         = 0;
-    if  (DebugSRT) binSize = 1000;
+    if  (DebugSRT) binSize = 100;
     else           binSize = 1000;
     saveFreq      = 1; 
     nSaved        = 0;
@@ -153,7 +154,7 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
             if (measRatio) eHeader += boost::str(boost::format("%16s")%"nAred");
             if (measRatio) eHeader += boost::str(boost::format("%16s")%"nAext");
         }
-        else
+        if  (DebugILRT)
             if (measRatio) eHeader += boost::str(boost::format("%16s")%"LRatio");
         *communicator.stream("estimator") << eHeader;    
 
@@ -177,7 +178,7 @@ int SSEXY::AdjustParameters()
     //Run simulation without recording results
     for (int i=0; i!=100; i++){
         //Perform a Monte-Carlo step
-        MCstep();
+        MCstep(0);
         //Accumulate M's
         for (int j=0; j!=r; j++)
             Tn += Replicas[j]->getn();
@@ -402,7 +403,8 @@ vector<long>* SSEXY::SwitchAregion()
     bool Switch = true;    
     int  S0;
     int  S1;
-    if  (Aregion == &Ared){
+    //if  (Aregion == &Ared){
+    if (Ared.size() < Aext.size()){   
         for (auto sindex=Adif.begin(); sindex!=Adif.end(); sindex++){
             S0 = Replicas[1]->getSpin()->at(*sindex);
             S1 = Replicas[0]->getTedge()->at(*sindex);
@@ -412,7 +414,9 @@ vector<long>* SSEXY::SwitchAregion()
             }
         }
         if  (Switch)
-            Aregion = &Aext;
+            //Aregion = &Aext;
+            nAext +=1;
+        nAred +=1;
         }
     else{
         for (auto sindex=Adif.begin(); sindex!=Adif.end(); sindex++){
@@ -424,7 +428,9 @@ vector<long>* SSEXY::SwitchAregion()
             }
         } 
         if  (Switch)
-            Aregion = &Ared;
+            //Aregion = &Ared;
+            nAred += 1;
+        nAext += 1;
     }        
     return Aregion; 
 }
@@ -454,10 +460,10 @@ int SSEXY::Measure()
     //Accumulate the partition function ratio estimator
     if  (measRatio)
         if  (DebugSRT){
-            if  (Aregion == &Ared) nAred += 1;
-            else                   nAext += 1; 
+            //if  (Aregion == &Ared) nAred += 1;
+            //else                   nAext += 1; 
         }
-        else
+        if  (DebugILRT)
             LRatio += ILRTrick();
     
     // If we've collected enough of measurements
@@ -487,7 +493,7 @@ int SSEXY::Measure()
                nAred = 0;
                nAext = 0;
             }
-            else{
+            if  (DebugILRT){
                 *communicator.stream("estimator") << boost::str(boost::format("%16.8E") %(1.0*LRatio/(1.0*binSize)));
                 LRatio = 0;
             }
@@ -628,7 +634,7 @@ int SSEXY::LoadState(){
 
         
 //**************************************************************************
-int SSEXY::MCstep()
+int SSEXY::MCstep(long step)
 {
 
     //----------------------------------------------------------------------        
@@ -637,10 +643,11 @@ int SSEXY::MCstep()
     //----------------------------------------------------------------------        
     nTotal = 0;
     for (int j=0; j!=r; j++){
-        if  (Replicas[j]->DiagonalMove()==1)
-            Replicas[j]->AdjustM();
+        if  (step%1000 == 0)
+            if  (Replicas[j]->DiagonalMove()==1)
+                Replicas[j]->AdjustM();
         Replicas[j]->ConstructLinks();
-        if  (measRatio and not(DebugSRT))
+        if  (measRatio and DebugILRT)
             Replicas[j]->GetDeterministicLinks();
         firsts[j] = Replicas[j]->getFirst();        
         lasts[j]  = Replicas[j]->getLast();        
@@ -1075,8 +1082,8 @@ int main(int argc, char *argv[])
     }
         
     cout << endl << "Measurement stage" << endl << endl;
-    for (long i=0; i!=100*params["measn"].as<long>(); i++){
-        ssexy.MCstep();
+    for (long i=0; i!=1000*params["measn"].as<long>(); i++){
+        ssexy.MCstep(i);
         ssexy.Measure();
     }
     return 0;
