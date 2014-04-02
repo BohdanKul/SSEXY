@@ -60,12 +60,12 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
     //Load replicas' datastructures if needed
     if (frName!="") LoadState();
     
-    Debug         = true;
+    Debug         = false;
     DebugSRT      = false;
     Nloops        = 1;    
     nMeas         = 0;
     if  (DebugSRT) binSize = 1000;
-    else           binSize = 1;
+    else           binSize = 1000;
     saveFreq      = 1; 
     nSaved        = 0;
     maxLoopSize   = 2400000;
@@ -320,13 +320,14 @@ float SSEXY::ILRTrick(){
     //Partition edge spins according to the loops they belong to
     LoopPartition(Ared);
 
-    bool lDebug = true;
+    bool lDebug = false;
     long downLoop;
     long upLoop;
     vector<long> twoLoops (2,0);
     map<long, set<long>> ConnectedLoops;
     set<long> AllLoops;
     //Merge loops that share common spins from Adif
+    if  (lDebug) cout << "Paths: " << endl;
     for (auto ADspin=Adif.begin(); ADspin!=Adif.end(); ADspin++){
         //If region A is increased, BCs exist between replicas 
         if  (Ared.size()<Aext.size()){    
@@ -352,6 +353,17 @@ float SSEXY::ILRTrick(){
             else
                 ConnectedLoops[downLoop].insert(upLoop);
             }
+    }
+
+    if  (lDebug){
+        cout << "Connected loops map: " << endl;
+        for (auto loop=ConnectedLoops.begin(); loop!=ConnectedLoops.end(); loop++){
+            cout << loop->first << ": ";
+            for (auto loop2=loop->second.begin(); loop2!=loop->second.end(); loop2++){
+                cout << *loop2 << " ";
+            }
+            cout << endl;
+        }
     }
 
     long L0 = AllLoops.size();
@@ -1063,7 +1075,7 @@ int main(int argc, char *argv[])
     }
         
     cout << endl << "Measurement stage" << endl << endl;
-    for (long i=0; i!=1*params["measn"].as<long>(); i++){
+    for (long i=0; i!=100*params["measn"].as<long>(); i++){
         ssexy.MCstep();
         ssexy.Measure();
     }
