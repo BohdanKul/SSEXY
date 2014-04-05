@@ -65,7 +65,7 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
     DebugILRT     = true;
     Nloops        = 1;    
     nMeas         = 0;
-    if  (DebugSRT) binSize = 1000;
+    if  (DebugSRT) binSize = 1;
     else           binSize = 1000;
     saveFreq      = 1; 
     nSaved        = 0;
@@ -73,6 +73,8 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
     SpinStiffness = 0;
     nAred         = 0;
     nAext         = 0;
+    nAredRT       = 0;
+    nAextRT       = 0;
     measSS        = _measSS;
     measRatio     = not (_Aext->empty());
 
@@ -154,8 +156,11 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
             if (measRatio) eHeader += boost::str(boost::format("%16s")%"nAred");
             if (measRatio) eHeader += boost::str(boost::format("%16s")%"nAext");
         }
-        if  (DebugILRT)
+        if  (DebugILRT){
             if (measRatio) eHeader += boost::str(boost::format("%16s")%"LRatio");
+            if (measRatio) eHeader += boost::str(boost::format("%16s")%"nAredRT");
+            if (measRatio) eHeader += boost::str(boost::format("%16s")%"nAextRT");
+        }
         *communicator.stream("estimator") << eHeader;    
 
 
@@ -321,14 +326,26 @@ float SSEXY::ILRTrick(){
     //Partition edge spins according to the loops they belong to
     LoopPartition(Ared);
 
-    bool lDebug = false;
+    bool lDebug = true;
+    if  (lDebug){
+        cout << endl << "Loops at deltaA=================================" << endl;
+        for (int r=0; r!=2; r++){
+            for (int bs=0; bs!=2; bs++){
+                for (auto spin=Adif.begin(); spin!=Adif.end(); spin++)
+                    cout << setw(4) << Partitions[r][*spin+N*bs];
+                cout << endl;
+            } 
+        cout << endl << endl;
+        }
+    }
+
+
     long downLoop;
     long upLoop;
     vector<long> twoLoops (2,0);
     map<long, set<long>> ConnectedLoops;
     set<long> AllLoops;
     //Merge loops that share common spins from Adif
-    if  (lDebug) cout << "Paths: " << endl;
     for (auto ADspin=Adif.begin(); ADspin!=Adif.end(); ADspin++){
         //If region A is increased, BCs exist between replicas 
         if  (Ared.size()<Aext.size()){    
@@ -356,7 +373,7 @@ float SSEXY::ILRTrick(){
             }
     }
 
-    if  (lDebug){
+    if  (not lDebug){
         cout << "Connected loops map: " << endl;
         for (auto loop=ConnectedLoops.begin(); loop!=ConnectedLoops.end(); loop++){
             cout << loop->first << ": ";
@@ -381,14 +398,17 @@ float SSEXY::ILRTrick(){
             for (auto mloop=path.begin(); mloop!=path.end(); mloop++){
                 MarkedLoops.insert(*mloop);
                 if  (lDebug) cout << *mloop << " ";
-            if  (lDebug) cout << endl;
             }
+            if  (lDebug) cout << endl;
 
             path.clear();  
             Ls += 1;
         }          
 
     if  (lDebug) cout << "Ls = " << Ls << " L0 = " << L0 << endl;
+     
+    nAredRT += pow(2,L0);
+    nAextRT += pow(2,Ls);
 
     return pow(2,Ls-L0);
             
@@ -488,14 +508,18 @@ int SSEXY::Measure()
         //Record partition function ratio if needed
         if  (measRatio){
             if  (DebugSRT){
-               *communicator.stream("estimator") << boost::str(boost::format("%16.8E") %(1.0*nAred/(1.0*binSize)));
-               *communicator.stream("estimator") << boost::str(boost::format("%16.8E") %(1.0*nAext/(1.0*binSize)));
-               nAred = 0;
-               nAext = 0;
+                *communicator.stream("estimator") << boost::str(boost::format("%16.8E") %(1.0*nAred/(1.0*binSize)));
+                *communicator.stream("estimator") << boost::str(boost::format("%16.8E") %(1.0*nAext/(1.0*binSize)));
+                nAred = 0;
+                nAext = 0;
             }
             if  (DebugILRT){
                 *communicator.stream("estimator") << boost::str(boost::format("%16.8E") %(1.0*LRatio/(1.0*binSize)));
+                *communicator.stream("estimator") << boost::str(boost::format("%16.8E") %(1.0*nAredRT/(1.0*binSize)));
+                *communicator.stream("estimator") << boost::str(boost::format("%16.8E") %(1.0*nAextRT/(1.0*binSize)));
                 LRatio = 0;
+                nAredRT = 0;
+                nAextRT = 0;
             }
         }
 
@@ -1081,7 +1105,7 @@ int main(int argc, char *argv[])
     }
         
     cout << endl << "Measurement stage" << endl << endl;
-    for (long i=0; i!=1000*params["measn"].as<long>(); i++){
+    for (long i=0; i!=1*params["measn"].as<long>(); i++){
         ssexy.MCstep();
         ssexy.Measure();
     }

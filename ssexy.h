@@ -33,6 +33,8 @@ class SSEXY: public RandomBase{
         float LRatio;
         long  nAred;
         long  nAext;
+        long  nAredRT;
+        long  nAextRT;
         
         vector<Replica*> Replicas; 
         vector<vector<long>> sites;
