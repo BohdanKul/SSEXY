@@ -124,7 +124,7 @@ def main():
                            S2A = ComputeS2(Zr[:len(Zr)//2])/float(Lx)
                            S2F = ComputeS2(Zr)/float(Lx)
                            S2B = S2A 
-        print 'Lx=%2.0d b=%0.2f' %(Lx,b)
+        print 'Lx=%2.0d b=%0.2f' %(int(Lx),float(b))
         if  args.renyi:
             if i==0:
                 ax1.errorbar(b,S2A.n,S2A.s, marker='s',color= colors[0], label = r'$\mathrm{S_2A}$')
