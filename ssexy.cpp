@@ -60,13 +60,13 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
     //Load replicas' datastructures if needed
     if (frName!="") LoadState();
     
-    Debug         = false;
-    DebugSRT      = true;
-    DebugILRT     = true;
+    Debug         = true;
+    DebugSRT      = false;
+    DebugILRT     = false;
     Nloops        = 1;    
     nMeas         = 0;
     if  (DebugSRT) binSize = 1;
-    else           binSize = 1000;
+    else           binSize = 1;
     saveFreq      = 1; 
     nSaved        = 0;
     maxLoopSize   = 2400000;
@@ -252,6 +252,8 @@ long SSEXY::LoopPartition(vector<long>& BC){
     int  ospin;
     int  oreplica;
     //Repeat for all edge spins in both replicas
+    DeterPaths.clear();
+
     for (auto oreplica=0; oreplica!=2; oreplica++){
         for (auto ispin=0; ispin!=2*N; ispin++){
             
@@ -259,9 +261,10 @@ long SSEXY::LoopPartition(vector<long>& BC){
             if  (not(Partitions[oreplica][ispin]<0)){
                 //Follow the BC loop until it comes back to the initial spin
                 nLoop += 1;
-                ospin = ispin;
+                ospin   = ispin;
                 spin    = ospin;
                 replica = oreplica;
+                DeterPaths[nLoop];
                 if (Debug) cout << "(r,s) = (" << replica << "," << spin << ")" << endl;
                 do{
                     //Switch to the other end of the loop the spin belongs to
@@ -276,6 +279,17 @@ long SSEXY::LoopPartition(vector<long>& BC){
                     //Switch to the spin connected by BC
                     connected = not(find(BC.begin(),BC.end(),nspin%N)==BC.end());
                     spin = BCnextSpin(nspin, replica, connected);       
+         
+                    //Add vertices path segment to the loop 
+                    //Necessary for a deterministic loop update
+                    list<long> tpath = Replicas[replica]->getLoopPaths()->at(spin); 
+                    if  (replica == 1)
+                        for (auto aleg=tpath.begin(); aleg!=tpath.end(); aleg++)
+                            DeterPaths[nLoop].push_back(*aleg+ns[0]);
+                    else
+                        DeterPaths[nLoop].insert(DeterPaths[nLoop].end(),tpath.begin(),tpath.end());
+                    
+
                     if (Debug) cout << "B: (r,s) = (" << replica << "," << spin << ")" << endl;
 
 
@@ -298,6 +312,144 @@ long SSEXY::LoopPartition(vector<long>& BC){
     //cout << "#Loops: " << nLoop << endl;
     return nLoop; 
 }        
+
+
+
+
+/**************************************************************************
+* Deterministic loops off-diagonal update.
+* It builds loops based on deterministic vertex moves and then flips each
+* one of them with 50% probability. The end product is an updated VTX vector.
+***************************************************************************/
+long SSEXY::DeterministicOffDiagonalMove(){
+    long nLoops  = LoopPartition(Ared);
+    long enleg;
+    long exleg;
+    long p;
+    pair<long,long> legvtx;
+    bool DetDebug = true;   
+ 
+    if  (DetDebug)
+        cout << "Deterministic loops: " << nLoops << endl;
+        
+    for (auto iLoop=1; iLoop!=(nLoops+1); iLoop++){
+        if  (uRand() < 0.5){ 
+            if  (DetDebug)
+                cout << iLoop << endl;
+            for (auto leg=DeterPaths[iLoop].begin(); leg!=DeterPaths[iLoop].end(); ++++leg){
+                enleg = (*leg)%4;
+                exleg = (*(++leg))%4;
+                p     = (long) (*leg)/4;
+                if  (DetDebug)
+                    cout << exleg << " ";
+                
+                //Deterministic out the new vertex type by hacking SwitchLeg method
+                legvtx = SwitchLeg(enleg,VTX[p],-1);
+                if  (legvtx.first-exleg != 0)
+                    legvtx = SwitchLeg(enleg,VTX[p],2);
+                
+                //Flip the vertex type
+                VTX[p] = legvtx.second;
+            }
+            cout << endl;
+        }
+    }
+}
+
+
+
+
+
+/**************************************************************************
+* Random loops off-diagonal update.
+* It generates a worm that moves randomly through the legs-space until 
+* it closes on itself by reaching its own tail. Every leg on worm's path
+* gets flipped. The end product is an updated VTX vector.
+***************************************************************************/
+long SSEXY::RandomOffDiagonalUpdate(){
+
+    // Connect replicas 
+    int kfirst = -1;
+    int klast  = -1;
+    for (int j=0; j!=firsts[0]->size(); j++){
+        //If spin belongs to the region of interest
+        if  (find(Aregion->begin(),Aregion->end(),j)!=Aregion->end()){
+            //Connect replicas together
+            kfirst = -1;
+            klast  = -1;
+            for (int k=0; k!=r; k++){
+                //If the spins is being acted upon in this replica
+                if  (firsts[k]->at(j)!=-1){
+                    //And it is not the first replica with the spin being acted upon    
+                    if  (kfirst != -1){
+                        //Connect 2 inner replicas by updating LINK structure
+                        LINK[lasts[klast]->at(j)] = firsts[k]->at(j);
+                        LINK[firsts[k]->at(j)]    = lasts[klast]->at(j);
+                    }
+                    else  kfirst = k;
+                    klast = k;
+                }
+            }//Replica loop    
+        
+            //Finally, connect outer replicas
+            if  (klast!=-1){
+                LINK[lasts[klast]->at(j)]   = firsts[kfirst]->at(j);
+                LINK[firsts[kfirst]->at(j)] = lasts[klast]->at(j);
+            }
+        }//If: the spin belong to A 
+   
+        //If the spin doesnt belong to the region of interest
+        else{
+            //Connect each replica to itself
+            for (int k=0; k!=r; k++){
+                //But only, if the spin is being acted upon
+                if  (firsts[k]->at(j)!=-1){
+                    LINK[lasts[k]->at(j)]  = firsts[k]->at(j);
+                    LINK[firsts[k]->at(j)] = lasts[k]->at(j);
+                }
+            }//Replica loop
+        }//If: spin doesnt belong to A 
+    }//Spins loop
+
+ 
+    //----------------------------------------------------------------------        
+    // Construct loops 
+    //----------------------------------------------------------------------        
+    long j0;                      //Loop entrance leg
+    long j;                       //Current leg
+    long p;
+    pair<long,long> legtype;      //Struct with the leg, and operator type   
+    
+    //Construct Nl number of loops 
+    if (nTotal>0){
+        for (long i=0; i!=Nloops; i++) {
+            j0 = uRandInt()%(4*nTotal);       //Pick a random loop entrance leg among all possible legs
+            j  = j0;
+            NvisitedLegs[i] = 0;         //Number of visited legs for i'th loop
+            //Construct an operator-loop
+            do  {
+                    p = (long) j/4;                     //Current operator index
+                    legtype = SwitchLeg(j%4,VTX[p],0.5);//Get the next leg and the new operator's type
+                    j       = legtype.first +4*p;       //Move to the next leg
+                    VTX[p]  = legtype.second;           //Update the type of the operator
+                    NvisitedLegs[i] += 1;
+                    if   (j == j0) break;               //If the loop is closed, we are done
+                    else{ 
+                        j = LINK[j];                   //Else move to the next linked leg
+                        NvisitedLegs[i] += 1;
+                    }
+                    
+                    //Limit the maximum loop size
+                    if  (NvisitedLegs[i]>maxLoopSize){
+                        cout << SSEXID << ": Extremely large loop" << endl;
+                        return 1;
+                    }          
+                         
+            } while  (j !=j0);                          //Another way to close the loop
+        }    
+    }
+
+}
 
 
 /**************************************************************************
@@ -326,7 +478,7 @@ float SSEXY::ILRTrick(){
     //Partition edge spins according to the loops they belong to
     LoopPartition(Ared);
 
-    bool lDebug = true;
+    bool lDebug = false;
     if  (lDebug){
         cout << endl << "Loops at deltaA=================================" << endl;
         for (int r=0; r!=2; r++){
@@ -672,6 +824,7 @@ int SSEXY::MCstep()
         Replicas[j]->ConstructLinks();
         if  (measRatio and DebugILRT)
             Replicas[j]->GetDeterministicLinks();
+        Replicas[j]->GetDeterministicLinks();
         firsts[j] = Replicas[j]->getFirst();        
         lasts[j]  = Replicas[j]->getLast();        
         links[j]  = Replicas[j]->getLink();        
@@ -712,93 +865,16 @@ int SSEXY::MCstep()
    // Merge structures necessary for the loop construction
     LINK = MergeVectors(links);
     VTX  = MergeVectors(vtxs);
-    //----------------------------------------------------------------------        
-    // Connect replicas 
-    //----------------------------------------------------------------------        
-    int kfirst = -1;
-    int klast  = -1;
-    for (int j=0; j!=firsts[0]->size(); j++){
-        //If spin belongs to the region of interest
-        if  (find(Aregion->begin(),Aregion->end(),j)!=Aregion->end()){
-            //Connect replicas together
-            kfirst = -1;
-            klast  = -1;
-            for (int k=0; k!=r; k++){
-                //If the spins is being acted upon in this replica
-                if  (firsts[k]->at(j)!=-1){
-                    //And it is not the first replica with the spin being acted upon    
-                    if  (kfirst != -1){
-                        //Connect 2 inner replicas by updating LINK structure
-                        LINK[lasts[klast]->at(j)] = firsts[k]->at(j);
-                        LINK[firsts[k]->at(j)]    = lasts[klast]->at(j);
-                    }
-                    else  kfirst = k;
-                    klast = k;
-                }
-            }//Replica loop    
-        
-            //Finally, connect outer replicas
-            if  (klast!=-1){
-                LINK[lasts[klast]->at(j)]   = firsts[kfirst]->at(j);
-                LINK[firsts[kfirst]->at(j)] = lasts[klast]->at(j);
-            }
-        }//If: the spin belong to A 
-   
-        //If the spin doesnt belong to the region of interest
-        else{
-            //Connect each replica to itself
-            for (int k=0; k!=r; k++){
-                //But only, if the spin is being acted upon
-                if  (firsts[k]->at(j)!=-1){
-                    LINK[lasts[k]->at(j)]  = firsts[k]->at(j);
-                    LINK[firsts[k]->at(j)] = lasts[k]->at(j);
-                }
-            }//Replica loop
-        }//If: spin doesnt belong to A 
-    }//Spins loop
 
- 
-    //----------------------------------------------------------------------        
-    // Construct loops 
-    //----------------------------------------------------------------------        
-    long j0;                      //Loop entrance leg
-    long j;                       //Current leg
-    long p;
-    pair<long,long> legtype;      //Struct with the leg, and operator type   
-    
-    //Construct Nl number of loops 
-    if (nTotal>0){
-        for (long i=0; i!=Nloops; i++) {
-            j0 = uRandInt()%(4*nTotal);       //Pick a random loop entrance leg among all possible legs
-            j  = j0;
-            NvisitedLegs[i] = 0;         //Number of visited legs for i'th loop
-            //Construct an operator-loop
-            do  {
-                    p = (long) j/4;                     //Current operator index
-                    legtype = SwitchLeg(j%4,VTX[p]);    //Get the next leg and the new operator's type
-                    j       = legtype.first +4*p;       //Move to the next leg
-                    VTX[p]  = legtype.second;           //Update the type of the operator
-                    NvisitedLegs[i] += 1;
-                    if   (j == j0) break;               //If the loop is closed, we are done
-                    else{ 
-                        j = LINK[j];                   //Else move to the next linked leg
-                        NvisitedLegs[i] += 1;
-                    }
-                    
-                    //Limit the maximum loop size
-                    if  (NvisitedLegs[i]>maxLoopSize){
-                        cout << SSEXID << ": Extremely large loop" << endl;
-                        return 1;
-                    }          
-                         
-            } while  (j !=j0);                          //Another way to close the loop
-        }    
-    }
+    //RandomOffDiagonalUpdate();
+    DeterministicOffDiagonalMove();
+
     //----------------------------------------------------------------------        
     //  Map back the changes to the operator list
     //----------------------------------------------------------------------        
     long leg;
     long b;
+    long p;
     for (int k=0; k!=r; k++){
         p = -1;
         for (auto oper=sms[k]->begin(); oper!=sms[k]->end(); oper++) 
@@ -864,7 +940,7 @@ int SSEXY::MCstep()
                 if  (Replicas[0]->uRand()<0.5)
                     for (int k=0; k!=r; k++)
                         spins[k]->at(j) = -spins[k]->at(j); 
-        }//if the spin belongs to region A
+        }//if the spin doesnt belong to region A
         else    
             for (int k=0; k!=r; k++){
                 if  (firsts[k]->at(j)==-1){                    //If the spin is not acted upon
@@ -908,12 +984,12 @@ long SSEXY::SwitchContinue(long enLeg){
 //#################################################################
 //#################################################################
 
-pair<long,long> SSEXY::SwitchLeg(long enLeg, long vtype){
+pair<long,long> SSEXY::SwitchLeg(long enLeg, long vtype, float prob){
     long exLeg   = -1;
     long newtype = -1;
     switch (vtype){
         case 1:
-                    if  (uRand()<0.5){
+                    if  (uRand()<prob){
                             if ((enLeg==1) or (enLeg==3)) newtype = 5;
                             else newtype = 6;
                             exLeg   = SwitchContinue(enLeg);
@@ -925,7 +1001,7 @@ pair<long,long> SSEXY::SwitchLeg(long enLeg, long vtype){
                     }
                     break;
         case 2:
-                    if  (uRand()<0.5){
+                    if  (uRand()<prob){
                             if ((enLeg==1) or (enLeg==3)) newtype = 6;
                             else newtype = 5;
                             exLeg   = SwitchContinue(enLeg);
@@ -937,7 +1013,7 @@ pair<long,long> SSEXY::SwitchLeg(long enLeg, long vtype){
                     }
                     break;
         case 3:
-                    if  (uRand()<0.5){
+                    if  (uRand()<prob){
                             if ((enLeg==0) or (enLeg==3)) newtype = 1;
                             else newtype = 2;
                             exLeg   = ContinueStraight(enLeg);
@@ -949,7 +1025,7 @@ pair<long,long> SSEXY::SwitchLeg(long enLeg, long vtype){
                     }
                     break;
         case 4:
-                    if  (uRand()<0.5){
+                    if  (uRand()<prob){
                             if ((enLeg==0) or (enLeg==3)) newtype = 2;
                             else newtype = 1;
                             exLeg   = ContinueStraight(enLeg);
@@ -961,7 +1037,7 @@ pair<long,long> SSEXY::SwitchLeg(long enLeg, long vtype){
                     }
                     break;
         case 5:
-                    if  (uRand()<0.5){
+                    if  (uRand()<prob){
                             if ((enLeg==0) or (enLeg==1)) newtype = 3;
                             else newtype = 4;
                             exLeg   = SwitchReverse(enLeg);
@@ -974,7 +1050,7 @@ pair<long,long> SSEXY::SwitchLeg(long enLeg, long vtype){
                     break;
              
         case 6:
-                    if  (uRand()<0.5){
+                    if  (uRand()<prob){
                             if ((enLeg==0) or (enLeg==1)) newtype = 4;
                             else newtype = 3;
                             exLeg   = SwitchReverse(enLeg);
@@ -1097,7 +1173,7 @@ int main(int argc, char *argv[])
     
     int NoAdjust;
     NoAdjust=0;
-    for (int i=0; i!=500; i++){
+    for (int i=0; i!=5; i++){
         if  (ssexy.AdjustParameters() == 0) NoAdjust += 1;
         else NoAdjust = 0;
         

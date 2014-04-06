@@ -369,7 +369,7 @@ void Replica::GetDeterministicLinks(){
     //}
     //cout << endl << "Links size: " << links.size() <<endl;
     
-//Complimentary to the leLegs list, this list contains 
+    //Complimentary to the leLegs list, this list contains 
     //already marked legs
     list<long> lmLegs;
     
@@ -377,6 +377,9 @@ void Replica::GetDeterministicLinks(){
     long p;          //Operator index
     long leg;        //Leg index
     long nLoop = 0;  //Number of constructed loops
+
+    list<long> path;
+    LoopPaths.clear();
 
     //Find the head and tail spins of each loop
     for (int ispin=0; ispin!=2*N; ispin++){
@@ -389,8 +392,12 @@ void Replica::GetDeterministicLinks(){
         //If the leg is inactive, the loop is trivial
         if  (leg==-1){ 
             if  (ispin<N){
+                path.clear();
+                LoopPaths[ispin]   = path;
+                LoopPaths[ispin+N] = path;
+
                 nLoop += 1;
-                spinPart[ispin] = N+ispin;
+                spinPart[ispin]   = N+ispin;
                 spinPart[ispin+N] = ispin;
             }
             else continue;
@@ -409,16 +416,20 @@ void Replica::GetDeterministicLinks(){
                 
                 //Construct a new loop 
                 nLoop += 1; 
+                path.clear();
+                path.push_back(leg);
 
                 //First vertex move needs to be done out of loop
                 //since the last move must also be a vertex move 
                 p = (long) leg/4;   //index of the corresponding operator
                 leg = p*4 + SwitchLegDeter(leg%4,vtx[p]);  
-//                cout << "V switch: " << setw(4) << leg;
+//              cout << "V switch: " << setw(4) << leg;
 
                 while (find(leLegs.begin(),leLegs.end(),leg)==leLegs.end()) {
                    //Move to the leg it is connected to
+                   path.push_back(leg);
                    leg = links[leg];
+                   path.push_back(leg);
                    p   = (long) leg/4; 
 //                   cout << " L switch: " << setw(4) << leg << endl;
 
@@ -429,38 +440,15 @@ void Replica::GetDeterministicLinks(){
                 
                 //Stop if  we have reached a leg at an edge
                 }  
-//                cout << endl; 
-                //Construct a new loop 
-                        //nLoop += 1; 
-                        //do {
-                        //    //If at this point we havent reached a leg at an edge
-                        //    if  (find(leLegs.begin(),leLegs.end(),leg)==leLegs.end()){
-                        //        //Move to the leg it is connected to
-                        //        leg = links[leg];
-                        //        p   = (long) leg/4; 
-                        //        cout << " L switch: " << setw(4) << leg << endl;
-                        //      //  if  (leg==-1) exit(0);
-                        //    }
-                        //    //Else, stop loop construction
-                        //    else { 
-                        //          cout <<  endl;  
-                        //          break;
-                        //        }
-
-                        ////Stop if  we have reached a leg at an edge
-                        //}  while (find(leLegs.begin(),leLegs.end(),leg)==leLegs.end());
-                //Remove the end of the loop from the list of unmarked legs
-                //Add it to the list of marked legs.
                 leLegs.remove(leg); 
                 lmLegs.push_back(leg); 
-                //if  (leg!=-1){
-                //    leLegs.remove(leg); 
-                //    lmLegs.push_back(leg); 
-                //}
+                path.push_back(leg);
             
                 //Store loop's head and tail spins.
                 spinPart[ispin] = LegToSpin[leg]; 
                 spinPart[LegToSpin[leg]] = ispin; 
+                LoopPaths[ispin]   = path;
+                LoopPaths[LegToSpin[leg]] = path;
             }
         }
     }            

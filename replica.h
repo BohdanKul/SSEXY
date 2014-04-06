@@ -5,6 +5,7 @@
 //#include "communicator.h"
 #include "communicator.cpp"
 #include "randombase.cpp"
+#include <list>
 
 using namespace std;
 
@@ -38,6 +39,7 @@ private:
     vector<long> vtx;           //Vertex type
     vector<long> spinPart;      //Partion keeping the label of a loop
                                 //that a particular spin belongs to
+    map<long, list<long>> LoopPaths;
  
    
     //Methods
@@ -60,7 +62,8 @@ public:
     long DiagonalMove();
     void AdjustM();
 
-    vector<vector<long>> getSites()  {return sites;}
+    map<long,list<long>>* getLoopPaths() {return &LoopPaths;}
+    vector<vector<long>>  getSites()     {return sites;}
     vector<long>* getFirst()  {return &first;}
     vector<long>* getLast()   {return &last;}
     vector<long>* getLink()   {return &links;}

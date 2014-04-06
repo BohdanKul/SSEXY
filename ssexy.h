@@ -5,6 +5,7 @@
 #include <vector>
 #include <set>
 #include <map>
+#include <list>
 using namespace std;
 
 
@@ -59,6 +60,7 @@ class SSEXY: public RandomBase{
         vector<long> LINK; 
         vector<long> VTX; 
         vector<vector<long>> Partitions;
+        map<long,vector<long>> DeterPaths;
 
         long LegSpin[6][4];
         long nTotal;
@@ -77,13 +79,15 @@ class SSEXY: public RandomBase{
         long ContinueStraight(long enLeg);
         long SwitchReverse(long enLeg);
         long SwitchContinue(long enLeg);
-        pair<long,long> SwitchLeg(long leg, long vtype);
+        pair<long,long> SwitchLeg(long leg, long vtype, float prob);
         int BCnextSpin(int sindex, int& replica,bool connected);
         vector<long>* SwitchAregion();
         
         float ALRTrick();
         float ILRTrick();
         long  LoopPartition(vector<long>& BC);
+        long  DeterministicOffDiagonalMove();
+        long  RandomOffDiagonalUpdate();
         //long  GetConnectedSubraph(map<long,set<long>>& graph, set<long>& path,long cpos);
 
     public:
