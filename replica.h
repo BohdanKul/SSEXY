@@ -37,18 +37,21 @@ private:
     vector<long> last;          //for a particular spin site
     vector<long> links;         //Linked vertex list
     vector<long> vtx;           //Vertex type
+    vector<long> VtxPreviousMove;
     vector<long> spinPart;      //Partion keeping the label of a loop
                                 //that a particular spin belongs to
     map<long, list<long>> LoopPaths;
+    long PossibleVertexMoves[6][2];   
  
    
     //Methods
     float BondDiagonalEnergy(long b);
     void  LatticeGeometry();
     long  VertexType(long oper);
-    long  SwitchLegDeter(long enLeg, long vtype);
+    long  SwitchLegDeter(long enLeg, long vtype, long p);
     long  ContinueStraight(long enLeg);
     long  SwitchReverse(long enLeg);
+    long  SwitchContinue(long enLeg);
 
 public:
 

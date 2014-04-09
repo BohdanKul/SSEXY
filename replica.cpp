@@ -22,6 +22,21 @@ Replica::Replica(unsigned short _Nx, unsigned short _Ny, float _T, long seed, in
 
 {
   
+    //Data structure that associates possible
+    //moves for every type of vertex. There are 
+    //six types of vertices, and three types of
+    //moves:
+    //  0 - continue straight
+    //  1 - switch and continue
+    //  2 - switch and reverse
+    long tmp[6][2] = {  {0,1},
+                        {0,1},
+                        {0,2},
+                        {0,2},
+                        {1,2},
+                        {1,2}
+                     };
+    memcpy(PossibleVertexMoves,tmp,sizeof tmp);   
 
 
     first.size();
@@ -301,24 +316,45 @@ long Replica::ContinueStraight(long enLeg){
 
 long Replica::SwitchReverse(long enLeg){
     return enLeg - sgn(enLeg%2-1);
-
-}/**************************************************************
-* Switch leg deterministically for the loop construction
-**************************************************************/
-long Replica::SwitchLegDeter(long enLeg, long vtype){
-    
-    //Go straight if it is type 1 vertex
-    if  (vtype<3){
-        //cout << "type: " << setw(4) << vtype << " leg: " << setw(4) << enLeg << endl;
-        return ContinueStraight(enLeg);
-    }
-    //Switch and reverse if it type 2 vertex
-    else{
-        return SwitchReverse(enLeg);
-    }
 }
 
-
+long Replica::SwitchContinue(long enLeg){
+    return enLeg - 2*sgn(enLeg - 2);
+}
+/**************************************************************
+* Switch leg deterministically for the loop construction
+**************************************************************/
+long Replica::SwitchLegDeter(long enLeg, long vtype, long p){
+     
+    //"Memory" of deterministic path tracing. On first encounter
+    //of a vertex, it remembers the move that has been made, so
+    //that on the next pass, the same move can be done.
+    
+    bool DetDebug = false;
+    long move = -1;  //Move to make
+    //Choose a random move if the vertex hasnt been visited
+    if  (VtxPreviousMove[p]==-1){
+        //There are two move choices for a given vertex type
+        move = PossibleVertexMoves[vtype-1][uRandInt()%2];
+        //Remember it
+        VtxPreviousMove[p] = move;
+        if (DetDebug) cout << "New ";
+    }
+    //Otherwise, repeat the same move
+    else{
+         move = VtxPreviousMove[p];
+         if (DetDebug) cout << "Memory "; 
+        }
+    //Do the move
+    long exLeg = -1;
+    switch (move){
+            case 0: exLeg = ContinueStraight(enLeg); break;
+            case 1: exLeg = SwitchContinue(enLeg);   break;
+            case 2: exLeg = SwitchReverse(enLeg);    break;   
+    }
+    if (DetDebug) cout << "move=" << move <<" enLeg =" << enLeg << " exLeg=" << exLeg << " type=" << vtype << " operator#=" << p << endl;
+    return exLeg;
+}
 
     
 /**************************************************************
@@ -326,9 +362,14 @@ long Replica::SwitchLegDeter(long enLeg, long vtype){
 **************************************************************/
 void Replica::GetDeterministicLinks(){
 
+
+    bool DetDebug = false;
+
     //Reset the main datastructure    
     fill(spinPart.begin(),spinPart.end(),-1);
 
+    //Reset the memory of performed vertex moves
+    VtxPreviousMove.assign(n,-1);
 
     //A map from edge legs to spins they are associated with.
     //In order to distinguish the upper and lower edge spins,
@@ -397,6 +438,7 @@ void Replica::GetDeterministicLinks(){
                 LoopPaths[ispin+N] = path;
 
                 nLoop += 1;
+                if  (DetDebug) cout << "Loop: " << nLoop << endl;
                 spinPart[ispin]   = N+ispin;
                 spinPart[ispin+N] = ispin;
             }
@@ -416,13 +458,14 @@ void Replica::GetDeterministicLinks(){
                 
                 //Construct a new loop 
                 nLoop += 1; 
+                if  (DetDebug) cout << "Loop: " << nLoop << endl;
                 path.clear();
                 path.push_back(leg);
 
                 //First vertex move needs to be done out of loop
                 //since the last move must also be a vertex move 
                 p = (long) leg/4;   //index of the corresponding operator
-                leg = p*4 + SwitchLegDeter(leg%4,vtx[p]);  
+                leg = p*4 + SwitchLegDeter(leg%4,vtx[p],p);  
 //              cout << "V switch: " << setw(4) << leg;
 
                 while (find(leLegs.begin(),leLegs.end(),leg)==leLegs.end()) {
@@ -435,7 +478,7 @@ void Replica::GetDeterministicLinks(){
 
                     //Switch to another leg on the same vertex
                     p = (long) leg/4;   //index of the corresponding operator
-                    leg = p*4 + SwitchLegDeter(leg%4,vtx[p]);  
+                    leg = p*4 + SwitchLegDeter(leg%4,vtx[p],p);  
 //                    cout << "V switch: " << setw(4) << leg;
                 
                 //Stop if  we have reached a leg at an edge
@@ -451,12 +494,14 @@ void Replica::GetDeterministicLinks(){
                 LoopPaths[LegToSpin[leg]] = path;
             }
         }
+        if  (DetDebug){
+            long i=0;
+            for (auto spin=spinPart.begin(); spin!=spinPart.end(); spin++){
+                cout << setw(4) << *spin;
+                i += 1;
+                if  (i == N) cout << endl; 
+            }
+            cout << endl;
+        }
     }            
-//    int i = 0; 
-//    for (auto spin=spinPart.begin(); spin!=spinPart.end(); spin++){
-//        cout << setw(4) << *spin;
-//        i += 1;
-//        if  (i == N) cout << endl; 
-//    }
-//    cout << endl;
 } 
