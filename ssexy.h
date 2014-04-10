@@ -68,8 +68,9 @@ class SSEXY: public RandomBase{
         long saveFreq;
         long nSaved; 
         bool Debug;
-        bool DebugSRT;
-        bool DebugILRT;
+        bool SRTon;
+        bool ILRTon;
+        bool RandOffUpdate;
 
         //File management
         Communicator communicator;

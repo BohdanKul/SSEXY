@@ -60,12 +60,13 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
     //Load replicas' datastructures if needed
     if (frName!="") LoadState();
     
-    Debug         = false;
-    DebugSRT      = true;
-    DebugILRT     = true;
-    Nloops        = 1;    
-    nMeas         = 0;
-    if  (DebugSRT) binSize = 100;
+    Debug      = false;
+    RandOffUpdate = true;
+    SRTon      = true;
+    ILRTon     = true;
+    Nloops     = 1;    
+    nMeas      = 0;
+    if  (SRTon) binSize = 100;
     else           binSize = 100;
     saveFreq      = 1; 
     nSaved        = 0;
@@ -152,11 +153,11 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
     if (frName==""){
         eHeader = boost::str(boost::format("#%15s%16s%16s")%"nT"%"ET"%"Legs");
         if (measSS)    eHeader += boost::str(boost::format("%16s")%"SS");
-        if  (DebugSRT){
+        if  (SRTon){
             if (measRatio) eHeader += boost::str(boost::format("%16s")%"nAred");
             if (measRatio) eHeader += boost::str(boost::format("%16s")%"nAext");
         }
-        if  (DebugILRT){
+        if  (ILRTon){
             if (measRatio) eHeader += boost::str(boost::format("%16s")%"LRatio");
             if (measRatio) eHeader += boost::str(boost::format("%16s")%"nAredRT");
             if (measRatio) eHeader += boost::str(boost::format("%16s")%"nAextRT");
@@ -184,25 +185,29 @@ int SSEXY::AdjustParameters()
     for (int i=0; i!=100; i++){
         //Perform a Monte-Carlo step
         MCstep();
-        //Accumulate M's
-        for (int j=0; j!=r; j++)
-            Tn += Replicas[j]->getn();
-        //Accumulate legs 
-        for (int j=0; j!=Nloops; j++)
-            TLegs += NvisitedLegs[j];
-    } 
-    
+        if  (RandOffUpdate){
+            //Accumulate M's
+            for (int j=0; j!=r; j++)
+                Tn += Replicas[j]->getn();
+            //Accumulate legs 
+            for (int j=0; j!=Nloops; j++)
+                TLegs += NvisitedLegs[j];
+        } 
+    }
+ 
     //Increase Nloops if not enough legs
     // are being generated
-    if  (TLegs > 2*Tn)
-        return 0;
-    else{
-        Nloops += 1;
-        NvisitedLegs.resize(Nloops,0);
-        TNvisitedLegs.resize(Nloops,0);
-        cout << SSEXID << ": Legs = " << TLegs/100.0 << " 2xnT = " << Tn*2/100.0 << endl;
-        cout << SSEXID << ": Increase # of loops to " << Nloops << endl;
-        return 1;
+    if  (RandOffUpdate){
+        if  (TLegs > 2*Tn)
+            return 0;
+        else{
+            Nloops += 1;
+            NvisitedLegs.resize(Nloops,0);
+            TNvisitedLegs.resize(Nloops,0);
+            cout << SSEXID << ": Legs = " << TLegs/100.0 << " 2xnT = " << Tn*2/100.0 << endl;
+            cout << SSEXID << ": Increase # of loops to " << Nloops << endl;
+            return 1;
+        }
     }
 }
 
@@ -491,7 +496,7 @@ float SSEXY::ALRTrick(){
 float SSEXY::ILRTrick(){
 
     //Partition edge spins according to the loops they belong to
-    LoopPartition(Ared);
+    if  (RandOffUpdate)     LoopPartition(Ared);
 
     bool lDebug = false;
     if  (lDebug){
@@ -646,11 +651,11 @@ int SSEXY::Measure()
 
     //Accumulate the partition function ratio estimator
     if  (measRatio)
-        if  (DebugSRT){
+        if  (SRTon){
             //if  (Aregion == &Ared) nAred += 1;
             //else                   nAext += 1; 
         }
-        if  (DebugILRT)
+        if  (ILRTon)
             LRatio += ILRTrick();
     
     // If we've collected enough of measurements
@@ -674,13 +679,13 @@ int SSEXY::Measure()
 
         //Record partition function ratio if needed
         if  (measRatio){
-            if  (DebugSRT){
+            if  (SRTon){
                 *communicator.stream("estimator") << boost::str(boost::format("%16.8E") %(1.0*nAred/(1.0*binSize)));
                 *communicator.stream("estimator") << boost::str(boost::format("%16.8E") %(1.0*nAext/(1.0*binSize)));
                 nAred = 0;
                 nAext = 0;
             }
-            if  (DebugILRT){
+            if  (ILRTon){
                 *communicator.stream("estimator") << boost::str(boost::format("%16.8E") %(1.0*LRatio/(1.0*binSize)));
                 *communicator.stream("estimator") << boost::str(boost::format("%16.8E") %(1.0*nAredRT/(1.0*binSize)));
                 *communicator.stream("estimator") << boost::str(boost::format("%16.8E") %(1.0*nAextRT/(1.0*binSize)));
@@ -837,9 +842,8 @@ int SSEXY::MCstep()
         if  (Replicas[j]->DiagonalMove()==1)
             Replicas[j]->AdjustM();
         Replicas[j]->ConstructLinks();
-        //if  (measRatio and DebugILRT)
-        //    Replicas[j]->GetDeterministicLinks();
-        Replicas[j]->GetDeterministicLinks();
+        if  ((measRatio and ILRTon) or not(RandOffUpdate))
+            Replicas[j]->GetDeterministicLinks();
         firsts[j] = Replicas[j]->getFirst();        
         lasts[j]  = Replicas[j]->getLast();        
         links[j]  = Replicas[j]->getLink();        
@@ -852,7 +856,7 @@ int SSEXY::MCstep()
         nTotal   += ns[j];    
     }
 
-    if  (measRatio and DebugSRT){
+    if  (measRatio and SRTon){
         Aregion = SwitchAregion();
     }
     
@@ -881,9 +885,8 @@ int SSEXY::MCstep()
     LINK = MergeVectors(links);
     VTX  = MergeVectors(vtxs);
 
-    //RandomOffDiagonalUpdate();
-    //DeterministicOffDiagonalMove();
-    RandomOffDiagonalUpdate();
+    if  (RandOffUpdate) RandomOffDiagonalUpdate();
+    else                DeterministicOffDiagonalMove();
 
     //----------------------------------------------------------------------        
     //  Map back the changes to the operator list
@@ -1189,7 +1192,7 @@ int main(int argc, char *argv[])
     
     int NoAdjust;
     NoAdjust=0;
-    for (int i=0; i!=0; i++){
+    for (int i=0; i!=100; i++){
         if  (ssexy.AdjustParameters() == 0) NoAdjust += 1;
         else NoAdjust = 0;
         
