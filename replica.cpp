@@ -356,6 +356,19 @@ long Replica::SwitchLegDeter(long enLeg, long vtype, long p){
     return exLeg;
 }
 
+
+//long Replica::SwitchLegDeter(long enLeg, long vtype, long p){
+//    
+//    //Go straight if it is type 1 vertex
+//    if (vtype<3){
+//        //cout << "type: " << setw(4) << vtype << " leg: " << setw(4) << enLeg << endl;
+//        return ContinueStraight(enLeg);
+//    }
+//    //Switch and reverse if it type 2 vertex
+//    else{
+//        return SwitchReverse(enLeg);
+//    }
+//}
     
 /**************************************************************
 * Partition edge spins based on the loop they belong to. 
@@ -495,6 +508,7 @@ void Replica::GetDeterministicLinks(){
             }
         }
         if  (DetDebug){
+            cout << "Spin partition: " << endl;
             long i=0;
             for (auto spin=spinPart.begin(); spin!=spinPart.end(); spin++){
                 cout << setw(4) << *spin;

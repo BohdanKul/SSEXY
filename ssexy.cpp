@@ -60,13 +60,13 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
     //Load replicas' datastructures if needed
     if (frName!="") LoadState();
     
-    Debug         = true;
-    DebugSRT      = false;
-    DebugILRT     = false;
+    Debug         = false;
+    DebugSRT      = true;
+    DebugILRT     = true;
     Nloops        = 1;    
     nMeas         = 0;
-    if  (DebugSRT) binSize = 1;
-    else           binSize = 1;
+    if  (DebugSRT) binSize = 100;
+    else           binSize = 100;
     saveFreq      = 1; 
     nSaved        = 0;
     maxLoopSize   = 2400000;
@@ -234,9 +234,13 @@ long SSEXY::LoopPartition(vector<long>& BC){
     int i;
     if  (Debug){
         cout << endl << "Before connection=================================" << endl;
-        for (int r=0; r!=2; r++){
+        cout << "Boundary conditions: " << endl;
+        for (auto ibc=BC.begin(); ibc!=BC.end(); ibc++)
+            cout << *ibc << " ";
+        cout << endl;
+        for (int ir=0; ir!=2; ir++){
             i=0;
-            for (auto spin=Partitions[r].begin(); spin!=Partitions[r].end(); spin++){
+            for (auto spin=Partitions[ir].begin(); spin!=Partitions[ir].end(); spin++){
                 cout << setw(4) << *spin;
                 i += 1;
                 if  (i == N) cout << endl; 
@@ -285,7 +289,7 @@ long SSEXY::LoopPartition(vector<long>& BC){
                     list<long> tpath = Replicas[replica]->getLoopPaths()->at(spin); 
                     if  (replica == 1)
                         for (auto aleg=tpath.begin(); aleg!=tpath.end(); aleg++)
-                            DeterPaths[nLoop].push_back(*aleg+ns[0]);
+                            DeterPaths[nLoop].push_back(*aleg+4*ns[0]);
                     else
                         DeterPaths[nLoop].insert(DeterPaths[nLoop].end(),tpath.begin(),tpath.end());
                     
@@ -295,15 +299,19 @@ long SSEXY::LoopPartition(vector<long>& BC){
 
                 } while ((spin!=ospin) or (replica!=oreplica));
                 if  (Debug){
-                     for (int r=0; r!=2; r++){
+                     for (int ir=0; ir!=2; ir++){
                          i=0;
-                         for (auto spin=Partitions[r].begin(); spin!=Partitions[r].end(); spin++){
+                         for (auto spin=Partitions[ir].begin(); spin!=Partitions[ir].end(); spin++){
                              cout << setw(4) << *spin;
                              i += 1;
                              if  (i == N) cout << endl; 
                          }
-                     cout << endl << endl;
+                     cout << endl;
                      }
+                     cout << "Deterministic path " << nLoop << " : " ;
+                     for (auto iloop=DeterPaths[nLoop].begin(); iloop!=DeterPaths[nLoop].end(); iloop++)
+                         cout << *iloop << " ";
+                     cout << endl << endl;
                  }
             }
         }
@@ -322,36 +330,43 @@ long SSEXY::LoopPartition(vector<long>& BC){
 * one of them with 50% probability. The end product is an updated VTX vector.
 ***************************************************************************/
 long SSEXY::DeterministicOffDiagonalMove(){
-    long nLoops  = LoopPartition(Ared);
+    long nLoops  = LoopPartition(*Aregion);
     long enleg;
     long exleg;
     long p;
     pair<long,long> legvtx;
-    bool DetDebug = true;   
+    bool DetDebug = false;   
  
-    if  (DetDebug)
+    if  (DetDebug){
+        cout << "Offdiagonal deterministic update" << endl;
         cout << "Deterministic loops: " << nLoops << endl;
+    }
         
     for (auto iLoop=1; iLoop!=(nLoops+1); iLoop++){
         if  (uRand() < 0.5){ 
             if  (DetDebug)
-                cout << iLoop << endl;
-            for (auto leg=DeterPaths[iLoop].begin(); leg!=DeterPaths[iLoop].end(); ++++leg){
-                enleg = (*leg)%4;
-                exleg = (*(++leg))%4;
-                p     = (long) (*leg)/4;
-                if  (DetDebug)
-                    cout << exleg << " ";
-                
-                //Deterministic out the new vertex type by hacking SwitchLeg method
-                legvtx = SwitchLeg(enleg,VTX[p],-1);
-                if  (legvtx.first-exleg != 0)
-                    legvtx = SwitchLeg(enleg,VTX[p],2);
-                
-                //Flip the vertex type
-                VTX[p] = legvtx.second;
+                cout << "Loop: " << iLoop << endl;
+            long i = 0;
+            for (auto leg=DeterPaths[iLoop].begin(); leg!=DeterPaths[iLoop].end(); ++leg){
+                //cout << "i: " << ++i << endl;
+                if (*leg!=exleg){
+                    enleg = *leg;
+                    exleg = *(++leg);
+                    p     = (long) (*leg)/4;
+                    if  (DetDebug)
+                        cout << enleg << " " << exleg << " " ;
+                    
+                    //Deterministic out the new vertex type by hacking SwitchLeg method
+                    legvtx = SwitchLeg(enleg%4,VTX[p],-1);
+                    if  ((legvtx.first-(exleg%4)) != 0)
+                        legvtx = SwitchLeg(enleg%4,VTX[p],2);
+                    
+                    //Flip the vertex type
+                    VTX[p] = legvtx.second;
+                }
             }
-            cout << endl;
+            if  (DetDebug)
+                cout << endl;
         }
     }
 }
@@ -525,7 +540,7 @@ float SSEXY::ILRTrick(){
             }
     }
 
-    if  (not lDebug){
+    if  (lDebug){
         cout << "Connected loops map: " << endl;
         for (auto loop=ConnectedLoops.begin(); loop!=ConnectedLoops.end(); loop++){
             cout << loop->first << ": ";
@@ -822,8 +837,8 @@ int SSEXY::MCstep()
         if  (Replicas[j]->DiagonalMove()==1)
             Replicas[j]->AdjustM();
         Replicas[j]->ConstructLinks();
-        if  (measRatio and DebugILRT)
-            Replicas[j]->GetDeterministicLinks();
+        //if  (measRatio and DebugILRT)
+        //    Replicas[j]->GetDeterministicLinks();
         Replicas[j]->GetDeterministicLinks();
         firsts[j] = Replicas[j]->getFirst();        
         lasts[j]  = Replicas[j]->getLast();        
@@ -867,7 +882,8 @@ int SSEXY::MCstep()
     VTX  = MergeVectors(vtxs);
 
     //RandomOffDiagonalUpdate();
-    DeterministicOffDiagonalMove();
+    //DeterministicOffDiagonalMove();
+    RandomOffDiagonalUpdate();
 
     //----------------------------------------------------------------------        
     //  Map back the changes to the operator list
@@ -1173,7 +1189,7 @@ int main(int argc, char *argv[])
     
     int NoAdjust;
     NoAdjust=0;
-    for (int i=0; i!=5; i++){
+    for (int i=0; i!=0; i++){
         if  (ssexy.AdjustParameters() == 0) NoAdjust += 1;
         else NoAdjust = 0;
         
@@ -1181,7 +1197,7 @@ int main(int argc, char *argv[])
     }
         
     cout << endl << "Measurement stage" << endl << endl;
-    for (long i=0; i!=1*params["measn"].as<long>(); i++){
+    for (long i=0; i!=100*params["measn"].as<long>(); i++){
         ssexy.MCstep();
         ssexy.Measure();
     }
