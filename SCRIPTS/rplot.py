@@ -15,7 +15,7 @@ from matplotlib.ticker import MultipleLocator
 # -----------------------------------------------------------------------------
 def main():
 
-    order = ['Set','Lx','Ly','T','b','r', 'full','half', 'Ar', 'Ae']
+    order = ['det', 'ran','Set','Lx','Ly','T','b','r', 'full','half', 'Ar', 'Ae']
 
     parser = OptionParser() 
     parser = argparse.ArgumentParser(description='Plot Raw MC Equilibration Data for Scalar Estimators.')
@@ -59,6 +59,7 @@ def main():
         print sReduce.paramMap
         if  args.estimator=='SS':
             x = 1.0/np.array(x)
+        print sReduce.getTupleIdstr(order)
         errorbar(x, y, dy,\
                 marker='s',mec=colors[i],mfc=colors[i],color=colors[i],\
                 ls='',capsize=4,label=r'$\mathrm{%s}$' %sReduce.getTupleIdstr(order))
