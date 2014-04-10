@@ -62,8 +62,9 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
     
     Debug      = false;
     RandOffUpdate = true;
-    SRTon      = true;
-    ILRTon     = true;
+    SRTon      = false;
+    ILRTon     = false;
+    ALRTon     = true;
     Nloops     = 1;    
     nMeas      = 0;
     if  (SRTon) binSize = 100;
@@ -76,6 +77,8 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
     nAext         = 0;
     nAredRT       = 0;
     nAextRT       = 0;
+    LRatio        = 0;
+    ALRatio       = 0;
     measSS        = _measSS;
     measRatio     = not (_Aext->empty());
 
@@ -161,6 +164,9 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
             if (measRatio) eHeader += boost::str(boost::format("%16s")%"LRatio");
             if (measRatio) eHeader += boost::str(boost::format("%16s")%"nAredRT");
             if (measRatio) eHeader += boost::str(boost::format("%16s")%"nAextRT");
+        }
+        if  (ALRTon){
+            if (measRatio) eHeader += boost::str(boost::format("%16s")%"ALRatio");
         }
         *communicator.stream("estimator") << eHeader;    
 
@@ -486,7 +492,7 @@ float SSEXY::ALRTrick(){
     long AnLoops  = LoopPartition(Ared);
     long EAnLoops = LoopPartition(Aext);
 //    cout << "Ratio: " << (1.0*EAnLoops)/(1.0*AnLoops) << endl;
-    return pow(2,AnLoops-EAnLoops);
+    return pow(2,EAnLoops-AnLoops);
 }
 
 
@@ -657,7 +663,8 @@ int SSEXY::Measure()
         }
         if  (ILRTon)
             LRatio += ILRTrick();
-    
+        if  (ALRTon)
+            ALRatio +=ALRTrick(); 
     // If we've collected enough of measurements
     float E;
     long  TNLegs = 0;
@@ -692,6 +699,10 @@ int SSEXY::Measure()
                 LRatio = 0;
                 nAredRT = 0;
                 nAextRT = 0;
+            }
+            if  (ALRTon){
+                *communicator.stream("estimator") << boost::str(boost::format("%16.8E") %(1.0*ALRatio/(1.0*binSize)));
+                ALRatio = 0;
             }
         }
 
@@ -842,7 +853,7 @@ int SSEXY::MCstep()
         if  (Replicas[j]->DiagonalMove()==1)
             Replicas[j]->AdjustM();
         Replicas[j]->ConstructLinks();
-        if  ((measRatio and ILRTon) or not(RandOffUpdate))
+        if  ((measRatio and (ILRTon or ALRTon)) or not(RandOffUpdate))
             Replicas[j]->GetDeterministicLinks();
         firsts[j] = Replicas[j]->getFirst();        
         lasts[j]  = Replicas[j]->getLast();        

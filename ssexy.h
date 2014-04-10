@@ -32,6 +32,7 @@ class SSEXY: public RandomBase{
         //Measurements
         float SpinStiffness;
         float LRatio;
+        float ALRatio;
         long  nAred;
         long  nAext;
         long  nAredRT;
@@ -70,6 +71,7 @@ class SSEXY: public RandomBase{
         bool Debug;
         bool SRTon;
         bool ILRTon;
+        bool ALRTon;
         bool RandOffUpdate;
 
         //File management
