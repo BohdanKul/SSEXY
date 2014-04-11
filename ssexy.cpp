@@ -22,7 +22,7 @@ namespace po = boost::program_options;
 //**************************************************************************
 SSEXY:: SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, 
               long seed, bool _measSS, int _Asize, string frName, 
-              vector<long>* _Anor, vector<long>* _Ared, vector<long>* _Aext): 
+              LATTICE * _Anor, LATTICE* _Ared, LATTICE* _Aext): 
 communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
 {
     long tmp[6][4] = {  {-1,-1,-1,-1},
@@ -80,7 +80,7 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
     LRatio        = 0;
     ALRatio       = 0;
     measSS        = _measSS;
-    measRatio     = not (_Aext->empty());
+    measRatio     = _Aext->isDefined();
 
     if (measSS)    cout << "Measuring spin stiffness" << endl;
     if (measRatio) cout << "Measuring Z ratio" << endl;
@@ -100,14 +100,14 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
     Partitions.clear(); 
 
     //Initialize region A
-    Aregion = _Anor; 
+    Aregion = _Anor->getLattice(); 
   
     //For ratio trick there are two regions A.
     //Initialize them and their set  difference.
     if  (measRatio){
-        Ared = *_Ared;   //Reduced A region
-        Aext = *_Aext;   //Extended A region
-        Adif = {};       //Their difference: elements contained in Aext that arent in Ared 
+        Ared = *(_Ared->getLattice());   //Reduced A region
+        Aext = *(_Aext->getLattice());   //Extended A region
+        Adif = {};                     //Their difference: elements contained in Aext that arent in Ared 
         if  (Aext.size()>Ared.size()){
             for (auto spin=Aext.begin(); spin!=Aext.end(); spin++){
                 if  (find(Ared.begin(),Ared.end(),*spin)==Ared.end())
@@ -1197,7 +1197,7 @@ int main(int argc, char *argv[])
                 params["beta"].as<double>(), params["process_id"].as<int>(), 
                 params.count("super"),       Anor.getSize(),  
                 params["state"].as<string>(), 
-                Anor.getLattice(), Ared.getLattice(), Aext.getLattice());  
+                &Anor, &Ared, &Aext);  
 
     cout << endl << "Equilibration stage" << endl << endl;
     

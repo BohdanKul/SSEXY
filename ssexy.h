@@ -2,6 +2,7 @@
 #define SSEXY_H
 #include "randombase.h"
 #include "replica.h"
+#include "lattice.h"
 #include <vector>
 #include <set>
 #include <map>
@@ -94,7 +95,7 @@ class SSEXY: public RandomBase{
         //long  GetConnectedSubraph(map<long,set<long>>& graph, set<long>& path,long cpos);
 
     public:
-       SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, bool _measSS, int _Asize, string rfName, vector<long>* _Anor, vector<long>* _Ared, vector<long>* _Aext); 
+       SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, bool _measSS, int _Asize, string rfName, LATTICE* _Anor, LATTICE* _Ared, LATTICE* _Aext); 
        int   AdjustParameters();
        int   MCstep(); 
        int   Measure(); 
