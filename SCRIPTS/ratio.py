@@ -41,14 +41,16 @@ def main():
               'b': r'\beta',
               'T': r'T',
               'r': r'r',
-              'a': r'N_A'}
+              'a': r'N_A',
+              'ran': r'ran',
+              'det': r'det'}
 
 
     parser = argparse.ArgumentParser(description='Calculate entropy based on ratio of partition')
     parser.add_argument('fileNames', help='Scalar reduce files', nargs='+')
     parser.add_argument('--renyi',   action='store_true', default=False, help='Compute Renyi entropy')
-    parser.add_argument('--mutual',  action='store_true', default=True,  help='Compute mutual information')
-    parser.add_argument('--raw',     action='store_true', default=False,  help='Compute mutual information')
+    parser.add_argument('--mutual',  action='store_true', default=False,  help='Compute mutual information')
+    parser.add_argument('--raw',     action='store_true', default=False,  help='Show raw reduce data')
     args = parser.parse_args() 
 
     rcParams.update(mplrc.aps['params'])
@@ -61,7 +63,8 @@ def main():
         ax  = subplot(nplots,1,iplot)
         iplot -= 1
         ax.set_xlabel(r'$\mathrm{%s}$' %parMap['a'])
-        ax.set_ylabel(r'$\mathrm{N_{A_{i+1}}/N_{A_{i}}}$')
+        ax.set_ylabel(r'$\mathrm{Z_{A_{i+1}}/Z_{A_{i}}}$')
+        ax.set_xlim(3,15)
     if  args.renyi:
         ax1 = subplot(nplots,1,iplot)
         iplot -= 1
@@ -80,17 +83,20 @@ def main():
         if  not b in Betas:
             Betas[b] = {}
 
-        if 'A' in parmap: geom = parmap['A']
-        else:             geom = 'half'
+        if 'ran' in parmap: geom = 'ran'
+        if 'det' in parmap: geom = 'det'
+        #if 'A' in parmap: geom = parmap['A']
+        #else:             geom = 'half'
         
         Betas[b][geom] = scalarhelp
 
-    markers = {'full': 's', 'half': 'o', 'A': '>', 'B': '<'}
+    markers = {'ran': 's', 'det': 'o', 'full': 's', 'half': 'o', 'A': '>', 'B': '<'}
     dS2A, dS2Ae = {},{}
     dS2B, dS2Be = {},{}
     dS2F, dS2Fe = {},{}
     dMI,  dMIe  = {},{}
     i = 0
+    j = 0
     for b, dic in Betas.items():
         for A, rscalar in dic.items():
         
@@ -101,21 +107,32 @@ def main():
             rb, As = rscalar.getrParams()
             
             # Get Z ratios-----------------------------------------------
-            if 'ZRatio' in rscalar.getHeaders():
-                Zr  = 1.0/unumpy.uarray(rscalar.getAverages('ZRatio'))
-            else:
-                nAr, dnAr  = rscalar.getAverages('nAred')
-                nAe, dnAe  = rscalar.getAverages('nAext')
-                nAr = unumpy.uarray(nAr,dnAr) 
-                nAe = unumpy.uarray(nAe,dnAe) 
-                Zr  = nAe/nAr 
+
+            # Simple one-sided ratio 
+            nAr, dnAr  = rscalar.getAverages('nAred')
+            nAe, dnAe  = rscalar.getAverages('nAext')
+            inds_Al    = np.where(nAr==1.0)    
+            inds_Ah    = np.where(nAe==1.0)
+
+            print As[inds_Al]
+            nnAr = unumpy.uarray(nAe[inds_Al],dnAe[inds_Al])
+            nnAe = unumpy.uarray(nAr[inds_Ah],dnAr[inds_Ah]) 
+            Zr_SN  = nnAe/nnAr 
+
+            # Loop one-sided normalized Zr 
+            LRatio,dLRatio  = rscalar.getAverages('LRatio')
+            LRr   = unumpy.uarray(LRatio[inds_Al],dLRatio[inds_Al])
+            LRe   = unumpy.uarray(LRatio[inds_Ah],dLRatio[inds_Ah])
+            Zr_LN   = LRe/LRr
 
             # Plot raw data if needed -----------------------------------
             if  args.raw:
-                if i==0: ax.errorbar(As[:],  unumpy.nominal_values(Zr), unumpy.std_devs(Zr), ls = '', marker=markers[A],color=colors[i%len(colors)], label=r'$\mathrm{\beta=%0.3f \, A=%s}$' %(b,A)) 
-                else:   
-                    if  (A=='A') or (A=='half'): ax.errorbar(As[:],  unumpy.nominal_values(Zr), unumpy.std_devs(Zr), ls = '', marker=markers[A],color=colors[i%len(colors)], label=r'$\mathrm{\beta=%0.3f}$' %b) 
-                    else:                        ax.errorbar(As[:],  unumpy.nominal_values(Zr), unumpy.std_devs(Zr), ls = '', marker=markers[A],color=colors[i%len(colors)]) 
+                ax.errorbar(As[inds_Al],  unumpy.nominal_values(Zr_SN), unumpy.std_devs(Zr_SN), ls = '', marker='s',color=colors[(j)%len(colors)], label=r'$\mathrm{\beta=%0.3f \, SRT \, %s}$' %(b,parMap[A])) 
+                ax.errorbar(As[inds_Al],  unumpy.nominal_values(Zr_LN), unumpy.std_devs(Zr_LN), ls = '', marker='o',color=colors[(j)%len(colors)], label=r'$\mathrm{\beta=%0.3f \, LRT \, %s}$' %(b,parMap[A])) 
+                #if i==0: ax.errorbar(As[:],  unumpy.nominal_values(Zr), unumpy.std_devs(Zr), ls = '', marker=markers[A],color=colors[i%len(colors)], label=r'$\mathrm{\beta=%0.3f \, A=%s}$' %(b,A)) 
+                #else:   
+                #    if  (A=='A') or (A=='half'): ax.errorbar(As[:],  unumpy.nominal_values(Zr), unumpy.std_devs(Zr), ls = '', marker=markers[A],color=colors[i%len(colors)], label=r'$\mathrm{\beta=%0.3f}$' %b) 
+                #    else:                        ax.errorbar(As[:],  unumpy.nominal_values(Zr), unumpy.std_devs(Zr), ls = '', marker=markers[A],color=colors[i%len(colors)]) 
             # Compute Renyi enetropy for subregions ---------------------
             if  A=='A'   : S2A = ComputeS2(Zr)/float(Lx)
             if  A=='B'   : S2B = ComputeS2(Zr)/float(Lx)
@@ -124,6 +141,7 @@ def main():
                            S2A = ComputeS2(Zr[:len(Zr)//2])/float(Lx)
                            S2F = ComputeS2(Zr)/float(Lx)
                            S2B = S2A 
+            j += 1
         print 'Lx=%2.0d b=%0.2f' %(int(Lx),float(b))
         if  args.renyi:
             if i==0:
@@ -147,6 +165,7 @@ def main():
             (dMI[b],dMIe[b]) = (MI.nominal_value, MI.std_dev)
             print '     I/L  = ', MI 
         
+        
         i += 1
 
 
@@ -164,8 +183,9 @@ def main():
         print 'dicS2F04x04e = ', dS2Fe
     tight_layout()
     if args.raw:
-        ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.05),
-              fancybox=True, shadow=True, ncol=5)
+        ax.legend(loc='best',frameon=False)
+        #ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.05),
+        #      fancybox=True, shadow=True, ncol=5)
     if args.renyi:
         ax1.legend(loc='best',frameon=False)
         
