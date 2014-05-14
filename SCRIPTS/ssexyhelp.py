@@ -54,9 +54,7 @@ def getReduceParamMap(fname):
             #paramMap.update(dict([part.split('-')]))
             (item,value)=part.split('-')
             if '.' in value: paramMap[item] = float(value)
-            else:            
-                if   (item!='A'): paramMap[item] = int(value)
-                else:             paramMap[item] = value
+            else:            paramMap[item] = int(value)
         else:
             paramMap[part] = ''
 

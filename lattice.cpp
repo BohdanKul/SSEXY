@@ -19,7 +19,7 @@ LATTICE::LATTICE(string _Lname, const char* _cline)
     char *end;
     size = strtol(_cline, &end, 10);
     if  (!*end){ 
-        cout << "Automatic generation of region  " << Lname << "containing " << size << " spins" << endl;
+        cout << "Automatic generation of region  " << Lname << " containing " << size << " spins" << endl;
         Generate(size);
     }
     else{

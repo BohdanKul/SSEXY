@@ -18,7 +18,9 @@ namespace po = boost::program_options;
 
 
 //**************************************************************************
-SSEXY:: SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, bool _measSS, int _Asize, string frName, vector<long>* _Ared, vector<long>* _Aext): 
+SSEXY:: SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, 
+              long seed, bool _measSS, int _Asize, string frName, 
+              vector<long>* _Anor, vector<long>* _Ared, vector<long>* _Aext): 
 communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
 {
     long tmp[6][4] = {  {-1,-1,-1,-1},
@@ -57,9 +59,11 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
     if (frName!="") LoadState();
     
     Debug         = false;
+    DebugSRT      = false;
     Nloops        = 1;    
     nMeas         = 0;
-    binSize       = 1000;
+    if  (DebugSRT) binSize = 1000;
+    else           binSize = 100;
     saveFreq      = 1; 
     nSaved        = 0;
     maxLoopSize   = 2400000;
@@ -87,7 +91,7 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
     
 
     //Initialize region A
-    Aregion = _Ared; 
+    Aregion = _Anor; 
   
     //For ratio trick there are two regions A.
     //Initialize them and their set  difference.
@@ -102,40 +106,43 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
             cout << "Error: region A and its extension are equal" << endl;
             exit(0);
         }
-    }
         
-    cout << "A" << endl;
-    for (auto spin=Aregion->begin(); spin!=Aregion->end(); spin++){
-        cout << *spin << ' ';
-    }
-    cout << endl;
+        cout << "A" << endl;
+        for (auto spin=Aregion->begin(); spin!=Aregion->end(); spin++){
+            cout << *spin << ' ';
+        }
+        cout << endl;
  
-    cout << "Ared" << endl;
-    for (auto spin=Ared.begin(); spin!=Ared.end(); spin++){
-        cout << *spin << ' ';
-    }
-    cout << endl;
+        cout << "Ared" << endl;
+        for (auto spin=Ared.begin(); spin!=Ared.end(); spin++){
+            cout << *spin << ' ';
+        }
+        cout << endl;
  
-    cout << "Aext" << endl;
-    for (auto spin=Aext.begin(); spin!=Aext.end(); spin++){
-        cout << *spin << ' ';
-    }
-    cout << endl;
+        cout << "Aext" << endl;
+        for (auto spin=Aext.begin(); spin!=Aext.end(); spin++){
+            cout << *spin << ' ';
+        }
+        cout << endl;
  
-    cout << "Adiff" << endl;
-    for (auto spin=Adif.begin(); spin!=Adif.end(); spin++){
-        cout << *spin << ' ';
+        cout << "Adiff" << endl;
+        for (auto spin=Adif.begin(); spin!=Adif.end(); spin++){
+            cout << *spin << ' ';
+        }
+        cout << endl;
     }
-    cout << endl;
- 
+
    //Write headers for a new estimator file
     string eHeader;
     if (frName==""){
         eHeader = boost::str(boost::format("#%15s%16s%16s")%"nT"%"ET"%"Legs");
         if (measSS)    eHeader += boost::str(boost::format("%16s")%"SS");
-        if (measRatio) eHeader += boost::str(boost::format("%16s")%"nAred");
-        if (measRatio) eHeader += boost::str(boost::format("%16s")%"nAext");
-
+        if  (DebugSRT){
+            if (measRatio) eHeader += boost::str(boost::format("%16s")%"nAred");
+            if (measRatio) eHeader += boost::str(boost::format("%16s")%"nAext");
+        }
+        else
+            if (measRatio) eHeader += boost::str(boost::format("%16s")%"ZRatio");
         *communicator.stream("estimator") << eHeader;    
 
 
@@ -181,38 +188,6 @@ int SSEXY::AdjustParameters()
     }
 }
 
-int SSEXY::AdjustParameters()
-{
-    long Tn;    //Cummulative n
-    long TLegs; //Cummulative Legs
-    Tn    = 0;
-    TLegs = 0;
-
-    //Run simulation without recording results
-    for (int i=0; i!=100; i++){
-        //Perform a Monte-Carlo step
-        MCstep();
-        //Accumulate M's
-        for (int j=0; j!=r; j++)
-            Tn += Replicas[j]->getn();
-        //Accumulate legs 
-        for (int j=0; j!=Nloops; j++)
-            TLegs += NvisitedLegs[j];
-    } 
-    
-    //Increase Nloops if not enough legs
-    // are being generated
-    if  (TLegs > 2*Tn)
-        return 0;
-    else{
-        Nloops += 1;
-        NvisitedLegs.resize(Nloops,0);
-        TNvisitedLegs.resize(Nloops,0);
-        cout << SSEXID << ": Legs = " << TLegs/100.0 << " 2xnT = " << Tn*2/100.0 << endl;
-        cout << SSEXID << ": Increase # of loops to " << Nloops << endl;
-        return 1;
-    }
-}
 
 
 /**************************************************************************
@@ -240,7 +215,6 @@ long SSEXY::MeasureNLoop(vector<long>& BC){
     Partitions.push_back(*(Replicas[1]->getPart()));
    
     int i;
-    bool dDebug = true;
     if  (Debug){
         cout << endl << "Before connection=================================" << endl;
         for (int r=0; r!=2; r++){
@@ -303,7 +277,7 @@ long SSEXY::MeasureNLoop(vector<long>& BC){
         }
     }
   
-    cout << "#Loops: " << nLoop << endl;
+    //cout << "#Loops: " << nLoop << endl;
     return nLoop; 
 }        
 
@@ -319,8 +293,8 @@ float SSEXY::MeasureZRatio(){
     //all necessary structures are already computed.
     //That is why we need a special boolean flag in 
     //order to reduce the computational effort.
-    long AnLoops  = MeasureNLoop(Aregion);
-    long EAnLoops = MeasureNLoop(Aextended);
+    long AnLoops  = MeasureNLoop(Ared);
+    long EAnLoops = MeasureNLoop(Aext);
 //    cout << "Ratio: " << (1.0*EAnLoops)/(1.0*AnLoops) << endl;
     return pow(2,AnLoops-EAnLoops);
 }
@@ -384,8 +358,12 @@ int SSEXY::Measure()
 
     //Accumulate the partition function ratio estimator
     if  (measRatio)
-        if  (Aregion == &Ared) nAred += 1;
-        else                   nAext += 1; 
+        if  (DebugSRT){
+            if  (Aregion == &Ared) nAred += 1;
+            else                   nAext += 1; 
+        }
+        else
+            ZRatio += MeasureZRatio();
     
     // If we've collected enough of measurements
     float E;
@@ -407,11 +385,17 @@ int SSEXY::Measure()
         }
 
         //Record partition function ratio if needed
-        if (measRatio){
-           *communicator.stream("estimator") << boost::str(boost::format("%16.8E") %(1.0*nAred/(1.0*binSize)));
-           *communicator.stream("estimator") << boost::str(boost::format("%16.8E") %(1.0*nAext/(1.0*binSize)));
-           nAred = 0;
-           nAext = 0;
+        if  (measRatio){
+            if  (DebugSRT){
+               *communicator.stream("estimator") << boost::str(boost::format("%16.8E") %(1.0*nAred/(1.0*binSize)));
+               *communicator.stream("estimator") << boost::str(boost::format("%16.8E") %(1.0*nAext/(1.0*binSize)));
+               nAred = 0;
+               nAext = 0;
+            }
+            else{
+                *communicator.stream("estimator") << boost::str(boost::format("%16.8E") %(1.0*ZRatio/(1.0*binSize)));
+                ZRatio = 0;
+            }
         }
 
        //Record energy of each replica
@@ -561,6 +545,8 @@ int SSEXY::MCstep()
         if  (Replicas[j]->DiagonalMove()==1)
             Replicas[j]->AdjustM();
         Replicas[j]->ConstructLinks();
+        if  (measRatio and not(DebugSRT))
+            Replicas[j]->LoopPartition();
         firsts[j] = Replicas[j]->getFirst();        
         lasts[j]  = Replicas[j]->getLast();        
         links[j]  = Replicas[j]->getLink();        
@@ -573,7 +559,7 @@ int SSEXY::MCstep()
         nTotal   += ns[j];    
     }
 
-    if  (measRatio){
+    if  (measRatio and DebugSRT){
         Aregion = SwitchAregion();
     }
     
@@ -888,20 +874,32 @@ return pair <long,long> (exLeg,newtype);
 int main(int argc, char *argv[])
 {
     po::options_description cmdLineOptions("Command line options"); 
+    po::options_description simulationOptions("Simulation options"); 
+    po::options_description measurementOptions("Measurements options"); 
+    po::options_description physicalOptions("Physical parameters options"); 
     po::variables_map params;
-    cmdLineOptions.add_options()
+    simulationOptions.add_options()
             ("help,h", "produce help message")
+            ("state,s",      po::value<string>()->default_value(""),"path to the state file")
+            ("process_id,p", po::value<int>()->default_value(0),"process id")
+            ("replica,r",    po::value<int>()->default_value(1),"number of replicas")
+            ("region_A,a",   po::value<string>()->default_value(""),"path to the file defining region A.\n"
+                             "If set to an integer value, "
+                             "it defines the number of consecutif spins in region A. ")
+            ;
+    measurementOptions.add_options()
             ("temperature,T",po::value<double>()->default_value(-1), "temperature")
             ("beta,b",       po::value<double>()->default_value(-1),"inverse temperature")
             ("width,x",      po::value<int>(),"lattice width")
             ("height,y",     po::value<int>()->default_value(1),"lattice height")
-            ("process_id,p", po::value<int>()->default_value(0),"process id")
-            ("replica,r",    po::value<int>()->default_value(1),"number of replicas")
+            ;
+    physicalOptions.add_options()
             ("measn,m",      po::value<long>(),"number of measurements to take")
             ("super,w",      "turn on the spin stifness measurement. \n(r must be set to 1)")
-            ("state,s",      po::value<string>()->default_value(""),"path to the state file")
-            ("rtrick,t",     po::value<string>()->default_value(""),"path to the file defining extended region A.\nEquivalently, the number of extra spins in an extended partition for ratio trick")
-            ("region_A,a",   po::value<string>()->default_value(""),"path to the file defining region A.\nEquivalently, if set to an integer value,it defines the number of consecutif spins in region A. ");
+            ("rtrick,t",     po::value<string>()->default_value(""),"path to the file defining extended region A.")
+            ("region_Ared",  po::value<string>()->default_value(""),"path to the file defining reduced region A. ")
+            ;
+    cmdLineOptions.add(simulationOptions).add(measurementOptions).add(physicalOptions);
     po::store(po::parse_command_line(argc, argv, cmdLineOptions), params);
     po::notify(params);
 
@@ -935,20 +933,30 @@ int main(int argc, char *argv[])
         return 1; 
     }
 
-    // Attempt to define region A and its extension--------------------------------
+    // Attempt to define region A and its extensions--------------------------------
+    if  ((params["region_Ared"].as<string>()!="") and (params["rtrick"].as<string>()=="")){
+        cout << "Error: reduced A region can be defined only when --rtrick flag is set" << endl;
+        return 1;
+    }
     
-    if  (params.count("region_A") and params.count("rtrick")){
-        char* endAred;
-        char* endAext;
-        int  sizeAred = strtol(params["region_A"].as<string>().c_str(), &endAred, 10);
-        int  sizeAext = strtol(params["rtrick"].as<string>().c_str(),   &endAext, 10);
-        if  ((!*endAred) xor (!*endAext)){
-            cout << "Error: when rtrick and region A are both specified, they must be specified via the same method (number or file)" << endl;
-            exit(0);
-        }
-    } 
-    LATTICE Ared("A", params["region_A"].as<string>().c_str());
-    LATTICE Aext("A extended",  params["rtrick"].as<string>().c_str());
+    
+    string region_Ared;
+    region_Ared = params["region_Ared"].as<string>();
+    if  (region_Ared=="")
+         region_Ared = params["region_A"].as<string>();
+    //if  (params.count("region_A") and params.count("rtrick")){
+        //char* endAred
+        //char* endAext;
+        //int  sizeAred = strtol(params["region_A"].as<string>().c_str(), &endAred, 10);
+        //int  sizeAext = strtol(params["rtrick"].as<string>().c_str(),   &endAext, 10);
+        //if  ((!*endAred) xor (!*endAext)){
+        //    cout << "Error: when rtrick and region A are both specified, they must be specified via the same method (number or file)" << endl;
+        //    exit(0);
+        //}
+    //} 
+    LATTICE Anor("A",          params["region_A"].as<string>().c_str());
+    LATTICE Aext("A extended", params["rtrick"].as<string>().c_str());
+    LATTICE Ared("A reduced",  region_Ared.c_str());
   
     //------------------------------------------------------------------------------
 
@@ -956,8 +964,9 @@ int main(int argc, char *argv[])
     SSEXY ssexy(params["replica"].as<int>(), params["width"].as<int>(),
                 params["height"].as<int>(),  params["temperature"].as<double>(), 
                 params["beta"].as<double>(), params["process_id"].as<int>(), 
-                params.count("super"),       Ared.getSize(),  
-                params["state"].as<string>(), Ared.getLattice(), Aext.getLattice());  
+                params.count("super"),       Anor.getSize(),  
+                params["state"].as<string>(), 
+                Anor.getLattice(), Ared.getLattice(), Aext.getLattice());  
 
     cout << endl << "Equilibration stage" << endl << endl;
     
