@@ -656,7 +656,7 @@ int SSEXY::Measure()
     
 
     //Accumulate the partition function ratio estimator
-    if  (measRatio)
+    if  (measRatio){
         if  (SRTon){
             //if  (Aregion == &Ared) nAred += 1;
             //else                   nAext += 1; 
@@ -665,6 +665,7 @@ int SSEXY::Measure()
             LRatio += ILRTrick();
         if  (ALRTon)
             ALRatio +=ALRTrick(); 
+    }
     // If we've collected enough of measurements
     float E;
     long  TNLegs = 0;
