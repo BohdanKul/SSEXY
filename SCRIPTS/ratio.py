@@ -63,8 +63,8 @@ def main():
         ax  = subplot(nplots,1,iplot)
         iplot -= 1
         ax.set_xlabel(r'$\mathrm{%s}$' %parMap['a'])
-        ax.set_ylabel(r'$\mathrm{Z_{A_{i+1}}/Z_{A_{i}}}$')
-        ax.set_xlim(3,15)
+        ax.set_ylabel(r'$\mathrm{\sigma_{[Z_{A_{i+1}}/Z_{A_{i}}]}}$')
+        ax.set_xlim(-1,16)
     if  args.renyi:
         ax1 = subplot(nplots,1,iplot)
         iplot -= 1
@@ -117,18 +117,29 @@ def main():
             print As[inds_Al]
             nnAr = unumpy.uarray(nAe[inds_Al],dnAe[inds_Al])
             nnAe = unumpy.uarray(nAr[inds_Ah],dnAr[inds_Ah]) 
-            Zr_SN  = nnAe/nnAr 
+            Zr_SN  = nnAr/nnAe 
 
-            # Loop one-sided normalized Zr 
+            # Loop one-sided normalized Zr (intermediate version)
             LRatio,dLRatio  = rscalar.getAverages('LRatio')
             LRr   = unumpy.uarray(LRatio[inds_Al],dLRatio[inds_Al])
             LRe   = unumpy.uarray(LRatio[inds_Ah],dLRatio[inds_Ah])
-            Zr_LN   = LRe/LRr
+            Zr_LN   = LRr/LRe
+            
+            # Loop two-sided normalized Zr (advanced version)
+            ALRatio,dALRatio  = rscalar.getAverages('ALRatio')
+            Zr_ALN = unumpy.uarray(ALRatio[inds_Al],dALRatio[inds_Al])
 
+            if  j==0:
+                norm = np.minimum(unumpy.std_devs(Zr_LN),unumpy.std_devs(Zr_ALN))
             # Plot raw data if needed -----------------------------------
             if  args.raw:
-                ax.errorbar(As[inds_Al],  unumpy.nominal_values(Zr_SN), unumpy.std_devs(Zr_SN), ls = '', marker='s',color=colors[(j)%len(colors)], label=r'$\mathrm{\beta=%0.3f \, SRT \, %s}$' %(b,parMap[A])) 
-                ax.errorbar(As[inds_Al],  unumpy.nominal_values(Zr_LN), unumpy.std_devs(Zr_LN), ls = '', marker='o',color=colors[(j)%len(colors)], label=r'$\mathrm{\beta=%0.3f \, LRT \, %s}$' %(b,parMap[A])) 
+                
+                #ax.plot(As[inds_Al],  unumpy.std_devs(Zr_SN)/norm, ls = '', marker='s',color=colors[(j)%len(colors)], label=r'$\mathrm{\beta=%0.3f \, SRT \, %s}$' %(b,parMap[A])) 
+                #ax.plot(As[inds_Al],  unumpy.std_devs(Zr_LN)/norm,  ls = '', marker='o',color=colors[(j)%len(colors)], label=r'$\mathrm{\beta=%0.3f \, LRT \, %s}$' %(b,parMap[A])) 
+                #ax.plot(As[inds_Al],  unumpy.std_devs(Zr_ALN)/norm, ls = '', marker='>',color=colors[(j)%len(colors)], label=r'$\mathrm{\beta=%0.3f \, ALRT \, %s}$' %(b,parMap[A])) 
+                ax.errorbar(As[inds_Al],  unumpy.nominal_values(Zr_SN),  unumpy.std_devs(Zr_SN),  ls = '', marker='s',color=colors[(j)%len(colors)], label=r'$\mathrm{\beta=%0.3f \, SRT \, %s}$' %(b,parMap[A])) 
+                ax.errorbar(As[inds_Al],  unumpy.nominal_values(Zr_LN),  unumpy.std_devs(Zr_LN),  ls = '', marker='o',color=colors[(j)%len(colors)], label=r'$\mathrm{\beta=%0.3f \, LRT \, %s}$' %(b,parMap[A])) 
+                ax.errorbar(As[inds_Al],  unumpy.nominal_values(Zr_ALN), unumpy.std_devs(Zr_ALN), ls = '', marker='>',color=colors[(j)%len(colors)], label=r'$\mathrm{\beta=%0.3f \, ALRT \, %s}$' %(b,parMap[A])) 
                 #if i==0: ax.errorbar(As[:],  unumpy.nominal_values(Zr), unumpy.std_devs(Zr), ls = '', marker=markers[A],color=colors[i%len(colors)], label=r'$\mathrm{\beta=%0.3f \, A=%s}$' %(b,A)) 
                 #else:   
                 #    if  (A=='A') or (A=='half'): ax.errorbar(As[:],  unumpy.nominal_values(Zr), unumpy.std_devs(Zr), ls = '', marker=markers[A],color=colors[i%len(colors)], label=r'$\mathrm{\beta=%0.3f}$' %b) 
