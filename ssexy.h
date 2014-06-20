@@ -7,6 +7,7 @@
 #include <set>
 #include <map>
 #include <list>
+#include <boost/timer/timer.hpp>
 using namespace std;
 
 
@@ -21,6 +22,14 @@ class SSEXY: public RandomBase{
         long maxLoopSize;
         bool measSS;
         bool measRatio;
+        bool measTime;
+        bool isMeasStage;
+        boost::timer::cpu_timer timerTotal;
+        boost::timer::cpu_timer timerDet;
+        boost::timer::cpu_timer timerRand;
+        boost::timer::cpu_timer timerLL;
+        boost::timer::cpu_timer timerRatio;
+        boost::timer::cpu_timer timerDL;
 
         //Physical parameters
         int r; // order of Renyi entropy
@@ -95,7 +104,8 @@ class SSEXY: public RandomBase{
         //long  GetConnectedSubraph(map<long,set<long>>& graph, set<long>& path,long cpos);
 
     public:
-       SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, bool _measSS, int _Asize, string rfName, LATTICE* _Anor, LATTICE* _Ared, LATTICE* _Aext); 
+       SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, bool _measSS, bool _measTime, int _Asize, string rfName, LATTICE* _Anor, LATTICE* _Ared, LATTICE* _Aext); 
+       ~SSEXY();
        int   AdjustParameters();
        int   MCstep(); 
        int   Measure(); 

@@ -20,8 +20,19 @@ namespace po = boost::program_options;
 
 
 //**************************************************************************
+
+SSEXY::~SSEXY()
+{
+    std::cout << "Total: " << boost::timer::format(timerTotal.elapsed(),5) << std::endl;
+    std::cout << "Det:   " << boost::timer::format(timerDet.elapsed(),5) << std::endl;
+    std::cout << "Rand:  " << boost::timer::format(timerRand.elapsed(),5) << std::endl;
+    std::cout << "LL:    " << boost::timer::format(timerLL.elapsed(),5) << std::endl;
+    std::cout << "Ratio: " << boost::timer::format(timerRatio.elapsed(),5) << std::endl;
+    
+};
+
 SSEXY:: SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, 
-              long seed, bool _measSS, int _Asize, string frName, 
+              long seed, bool _measSS, bool _measTime, int _Asize, string frName, 
               LATTICE * _Anor, LATTICE* _Ared, LATTICE* _Aext): 
 communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
 {
@@ -36,6 +47,14 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
     //Store the simulation id
     SSEXID = communicator.getId();
 
+    measTime = _measTime;
+    if  (measTime){
+        timerTotal.stop();
+        timerDet.stop();
+        timerRand.stop();
+        timerLL.stop();
+        timerRatio.stop();
+    }
     // Initialize replicas
     Nx = _Nx;
     Ny = _Ny;
@@ -81,6 +100,7 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
     ALRatio       = 0;
     measSS        = _measSS;
     measRatio     = _Aext->isDefined();
+    isMeasStage   = false;
 
     if (measSS)    cout << "Measuring spin stiffness" << endl;
     if (measRatio) cout << "Measuring Z ratio" << endl;
@@ -640,6 +660,8 @@ vector<long>* SSEXY::SwitchAregion()
 
 int SSEXY::Measure()
 {
+    isMeasStage = true;
+    timerTotal.resume();
     //Accumulate the new measurement
     nMeas += 1;
     for (int j=0; j!=r; j++)
@@ -853,9 +875,14 @@ int SSEXY::MCstep()
     for (int j=0; j!=r; j++){
         if  (Replicas[j]->DiagonalMove()==1)
             Replicas[j]->AdjustM();
+        if (isMeasStage) {timerLL.resume();}
         Replicas[j]->ConstructLinks();
-        if  ((measRatio and (ILRTon or ALRTon)) or not(RandOffUpdate))
+        timerLL.stop();
+        if  ((measRatio and (ILRTon or ALRTon)) or not(RandOffUpdate)){
+            if (isMeasStage) {timerRatio.resume();}
             Replicas[j]->GetDeterministicLinks();
+            timerRatio.stop();
+        }
         firsts[j] = Replicas[j]->getFirst();        
         lasts[j]  = Replicas[j]->getLast();        
         links[j]  = Replicas[j]->getLink();        
@@ -897,9 +924,17 @@ int SSEXY::MCstep()
     LINK = MergeVectors(links);
     VTX  = MergeVectors(vtxs);
 
-    if  (RandOffUpdate) RandomOffDiagonalUpdate();
-    else                DeterministicOffDiagonalMove();
-
+    if  (RandOffUpdate){
+        if (isMeasStage){timerRand.resume();}
+        RandomOffDiagonalUpdate();
+        timerRand.stop();
+    }
+    else{
+        //if (isMeasStage){timerDet.resume();}
+        //cout << "Deterministic Update" << endl;
+        DeterministicOffDiagonalMove();
+        //timerDet.stop();
+    }
     //----------------------------------------------------------------------        
     //  Map back the changes to the operator list
     //----------------------------------------------------------------------        
@@ -1112,6 +1147,7 @@ int main(int argc, char *argv[])
     po::variables_map params;
     simulationOptions.add_options()
             ("help,h", "produce help message")
+            ("timer",       "Turn on timer")
             ("state,s",      po::value<string>()->default_value(""),"path to the state file")
             ("process_id,p", po::value<int>()->default_value(0),"process id")
             ("replica,r",    po::value<int>()->default_value(1),"number of replicas")
@@ -1196,7 +1232,8 @@ int main(int argc, char *argv[])
     SSEXY ssexy(params["replica"].as<int>(), params["width"].as<int>(),
                 params["height"].as<int>(),  params["temperature"].as<double>(), 
                 params["beta"].as<double>(), params["process_id"].as<int>(), 
-                params.count("super"),       Anor.getSize(),  
+                params.count("super"),       params.count("timer"),
+                Anor.getSize(),  
                 params["state"].as<string>(), 
                 &Anor, &Ared, &Aext);  
 
