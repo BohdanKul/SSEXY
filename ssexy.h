@@ -7,7 +7,7 @@
 #include <set>
 #include <map>
 #include <list>
-#include <boost/timer/timer.hpp>
+#include "timer.h"
 using namespace std;
 
 
@@ -23,19 +23,14 @@ class SSEXY: public RandomBase{
         bool measSS;
         bool measRatio;
         bool measTime;
-        bool isMeasStage;
-        boost::timer::cpu_timer timerTotal;
-        boost::timer::cpu_timer timerDet;
-        boost::timer::cpu_timer timerRand;
-        boost::timer::cpu_timer timerLL;
-        boost::timer::cpu_timer timerRatio;
-        boost::timer::cpu_timer timerDL;
+        bool detVerbose;
 
         //Physical parameters
         int r; // order of Renyi entropy
         int Nx;
         int Ny;
         int N;
+        int dim;
         float Beta;
         float T;
 
@@ -62,6 +57,7 @@ class SSEXY: public RandomBase{
         vector<long> Aext;
         vector<long> Ared;
         vector<long> Adif;
+        long         AnLoops;
         vector<long> shifts;
         vector<long> ns;
         vector<long> Tns;
@@ -86,6 +82,7 @@ class SSEXY: public RandomBase{
 
         //File management
         Communicator communicator;
+        Timer        timer;
         long SSEXID;
 
         long Bounce(long enLeg);
@@ -104,7 +101,7 @@ class SSEXY: public RandomBase{
         //long  GetConnectedSubraph(map<long,set<long>>& graph, set<long>& path,long cpos);
 
     public:
-       SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, bool _measSS, bool _measTime, int _Asize, string rfName, LATTICE* _Anor, LATTICE* _Ared, LATTICE* _Aext); 
+       SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, bool _measSS, bool _measTime, bool _detVerbose, int _Asize, string rfName, LATTICE* _Anor, LATTICE* _Ared, LATTICE* _Aext); 
        ~SSEXY();
        int   AdjustParameters();
        int   MCstep(); 
