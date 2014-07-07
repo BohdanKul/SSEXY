@@ -100,7 +100,7 @@ class ScalarReduce:
         self.paramMap = getReduceParamMap(fileName)
         self.headers  = getHeadersFromFile(fileName)
         self.rvar     = self.headers[0]
-
+        self.loadData()
 ## -------------------------------------------------------------------------------
      def getTupleIdstr(self,order):
             

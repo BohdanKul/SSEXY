@@ -40,6 +40,8 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
     Nx = _Nx;
     Ny = _Ny;
     N  = Nx*Ny;
+    dim = int(Nx>1) + int(Ny>1);
+    if  (dim==0) dim = 1;
     r = _r;
 
     //Define temperature in one of two ways
@@ -61,7 +63,7 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
     if (frName!="") LoadState();
     
     Debug      = false;
-    RandOffUpdate = true;
+    RandOffUpdate = false;
     SRTon      = false;
     ILRTon     = false;
     ALRTon     = true;
@@ -670,8 +672,8 @@ int SSEXY::Measure()
     float E;
     long  TNLegs = 0;
     if  (nMeas == binSize){
-        //Record total Energy
-        E = -((float) Tns[r]/((float) binSize*N))/Beta + r*1.0;   //r*1.0 term represents the added energy offset per bond
+        //Record total Energy per spin
+        E = -((float) Tns[r]/((float) binSize*N))/Beta + r*dim*0.5;   //r*1.0 term represents the added energy offset per bond
         *communicator.stream("estimator") << boost::str(boost::format("%16.8E%16.8E") %(Tns[r]/(1.0*binSize)) %E);
         
         //Record loop data

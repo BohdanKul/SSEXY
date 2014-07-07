@@ -11,9 +11,9 @@ using namespace std;
 // Merge vectors (stored by reference in vectors)
 vector<long> MergeVectors(vector<vector<long>*> vectors){
     vector<long> merged;
-    int totalSize = 0;
+    long totalSize = 0;
     //Calculate the total size of resulting merged vector
-    for (int i=0; i!=vectors.size(); i++){
+    for (long i=0; i!=vectors.size(); i++){
         totalSize += vectors[i]->size();
     }
 
@@ -21,7 +21,7 @@ vector<long> MergeVectors(vector<vector<long>*> vectors){
     merged.reserve(totalSize);
 
     //Merge in sequence
-    for (int i=0; i!=vectors.size(); i++){
+    for (long i=0; i!=vectors.size(); i++){
         merged.insert(merged.end(),vectors[i]->begin(),vectors[i]->end());
     }
     return merged;

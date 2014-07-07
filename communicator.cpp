@@ -24,6 +24,7 @@ Communicator::Communicator(int _Nx, int _Ny, int _r, float _T, float _Beta, long
     }
 
     types  = vector<string> {"state","estimator"};
+
     outDir = "OUTPUT"; 
     
     //Generate or fetch the id

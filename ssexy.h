@@ -27,6 +27,7 @@ class SSEXY: public RandomBase{
         int Nx;
         int Ny;
         int N;
+        int dim;
         float Beta;
         float T;
 
