@@ -34,7 +34,7 @@ class SSEXY: public RandomBase{
         //Measurements
         float SpinStiffness;
         float LRatio;
-        float ALRatio;
+        double ALRatio;
         long  nAred;
         long  nAext;
         long  nAredRT;
@@ -88,7 +88,7 @@ class SSEXY: public RandomBase{
         int BCnextSpin(int sindex, int& replica,bool connected);
         vector<long>* SwitchAregion();
         
-        float ALRTrick();
+        double ALRTrick();
         float ILRTrick();
         long  LoopPartition(vector<long>& BC);
         long  DeterministicOffDiagonalMove();

@@ -484,7 +484,7 @@ long SSEXY::RandomOffDiagonalUpdate(){
 * Measure Z[Aregion]/Z[Aextended], i.e. the ratio of modified part-
 *tion function connected at Aregion and the one connected at Aextended. 
 ***************************************************************************/
-float SSEXY::ALRTrick(){
+double SSEXY::ALRTrick(){
     //Measure the number of loops formed in each
     //modified geometry.
     //When we call MeasureNLoop for the 2nd time,
