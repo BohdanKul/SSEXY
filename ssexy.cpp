@@ -63,10 +63,10 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
     if (frName!="") LoadState();
     
     Debug      = false;
-    RandOffUpdate = false;
-    SRTon      = false;
+    RandOffUpdate = true;
+    SRTon      = true;
     ILRTon     = false;
-    ALRTon     = true;
+    ALRTon     = false;
     Nloops     = 1;    
     nMeas      = 0;
     if  (SRTon) binSize = 100;
@@ -603,8 +603,8 @@ vector<long>* SSEXY::SwitchAregion()
     bool Switch = true;    
     int  S0;
     int  S1;
-    //if  (Aregion == &Ared){
-    if (Ared.size() < Aext.size()){   
+    if  (Aregion == &Ared){
+    //if (Ared.size() < Aext.size()){   
         for (auto sindex=Adif.begin(); sindex!=Adif.end(); sindex++){
             S0 = Replicas[1]->getSpin()->at(*sindex);
             S1 = Replicas[0]->getTedge()->at(*sindex);
@@ -613,11 +613,14 @@ vector<long>* SSEXY::SwitchAregion()
                 break;
             }
         }
-        if  (Switch)
-            //Aregion = &Aext;
+        if  (Switch){
+            Aregion = &Aext;
             nAext +=1;
-        nAred +=1;
         }
+        else{
+            nAred +=1;
+        }
+    }
     else{
         for (auto sindex=Adif.begin(); sindex!=Adif.end(); sindex++){
             S0 = Replicas[0]->getSpin()->at(*sindex);
@@ -627,10 +630,13 @@ vector<long>* SSEXY::SwitchAregion()
                 break;
             }
         } 
-        if  (Switch)
-            //Aregion = &Ared;
+        if  (Switch){
+            Aregion = &Ared;
             nAred += 1;
-        nAext += 1;
+        }
+        else{
+            nAext += 1;
+        }
     }        
     return Aregion; 
 }
@@ -871,7 +877,8 @@ int SSEXY::MCstep()
     }
 
     if  (measRatio and SRTon){
-        Aregion = SwitchAregion();
+        //Aregion = SwitchAregion();
+        SwitchAregion();
     }
     
    
