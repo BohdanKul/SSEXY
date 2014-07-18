@@ -136,15 +136,16 @@ class ScalarReduce:
          
 # -------------------------------------------------------------------------------
      def getrParams(self):
-         return self.rvar, self.data[:,0]
-
+         if len(self.data.shape)>1: return self.rvar, self.data[:,0]
+         else:                      return self.rvar, self.data[0]
 # -------------------------------------------------------------------------------
      def getAverages(self,estimator):
          if not(estimator in self.headers):
              return [],[]
          else:   
              index = self.headers.index(estimator)
-             return self.data[:,index], self.data[:,index+1]
+             if len(self.data.shape)>1: return self.data[:,index], self.data[:,index+1]
+             else:                       return self.data[index],   self.data[index+1]
 
 
 
@@ -159,6 +160,7 @@ class SSEXYHelp:
 
         self.baseDir  = baseDir
         self.dataName, out = getWildCardString(options) 
+        self.dataType = ['estimator']
 
     # -----------------------------------------------------------------------------
     def getID(self,fileName): 
@@ -197,7 +199,7 @@ class SSEXYHelp:
         # Otherwise we just go through and get the ID's we need
         else:
             for id in idList: 
-                lsCommand = 'ls -1 %s-%s-*%s.dat' % (self.baseDir,type,id)
+                lsCommand = 'ls -1 %s%s-*%s.dat' % (self.baseDir,type,id)
                 fileNames.extend(os.popen(lsCommand).read().split('\n'))
                 fileNames.pop() 
 
