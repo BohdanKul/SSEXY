@@ -58,6 +58,9 @@ def getScalarEst(type,ssexy,outName,reduceFlag, skip=0):
             headers = headers[::2]
             oldFormat = True
             print "Old estimator file format detected"
+        if 'Bins' in headers: 
+           SpanJobAverage = headers.index('Bins')
+           headers.pop(SpanJobAverage) 
         #if 'ZRatio' in headers:
         #    headers = np.array(headers)
         #    headers = np.delete(headers,3,axis=0)
@@ -82,11 +85,8 @@ def getScalarEst(type,ssexy,outName,reduceFlag, skip=0):
     for i,fname in enumerate(fileNames):
         Vals.append(float(ssexy.params[ssexy.id[i]][reduceFlag]))
    
-    print Vals
     lorder = range(len(fileNames))
-    print lorder
     lorder = zip(*sorted(zip(Vals,lorder)))[1]  
-    print lorder
     
     
     # record into a file
