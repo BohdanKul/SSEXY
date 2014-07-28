@@ -8,7 +8,7 @@
 using namespace std;
 //using boost::lexical_cast;
 
-Communicator::Communicator(int _Nx, int _Ny, int _r, float _T, float _Beta, long _p, string rfName, int _Asize)
+Communicator::Communicator(int _Nx, int _Ny, int _r, float _T, float _Beta, long _p, string rfName, int _Asize, bool _measTime)
 {
     p = _p;
     
