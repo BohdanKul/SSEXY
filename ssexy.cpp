@@ -30,7 +30,7 @@ SSEXY::~SSEXY()
 SSEXY:: SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, 
               long seed, bool _measSS, bool _measTime, bool _detVerbose, int _Asize, string frName, 
               LATTICE * _Anor, LATTICE* _Ared, LATTICE* _Aext): 
-communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize, _measTime, _detVerbose), 
+communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize, _measTime), 
 RandomBase(seed),
 timer(_measTime)
 {
@@ -370,7 +370,7 @@ long SSEXY::DeterministicOffDiagonalMove(){
     long exleg;
     long p;
     pair<long,long> legvtx;
-    bool DetDebug = true;   
+    bool DetDebug = false;   
  
     if  (DetDebug){
         cout << "Offdiagonal deterministic update" << endl;
@@ -379,23 +379,27 @@ long SSEXY::DeterministicOffDiagonalMove(){
         
     for (auto iLoop=1; iLoop!=(nLoops+1); iLoop++){
         if  (uRand() < 0.5){ 
-            if  (DetDebug)
-                cout << "Loop: " << iLoop << endl;
+            if  (DetDebug){
+               cout << "Flipping loop: " << iLoop << " Out of: " << nLoops << endl; //<< " Size: "<< DeterPaths[iLoop].size() << endl;
+            }
             long i = 0;
+            exleg = -1;
             for (auto leg=DeterPaths[iLoop].begin(); leg!=DeterPaths[iLoop].end(); ++leg){
-                //cout << "i: " << ++i << endl;
                 if (*leg!=exleg){
                     enleg = *leg;
-                    exleg = *(++leg);
+                    
+                    //exleg = *(++leg);
+                    exleg = *(next(leg));
+                    
                     p     = (long) (*leg)/4;
                     if  (DetDebug){
                         cout << enleg << " " << exleg << " " ;
-                        //if  ((enleg == -1) or (exleg == -1)){
-                        //     cout << " \n !!!!!!!!ERROR!!!!!!!!\n" << endl;
-                        //     exit(1);
-                        //}
+                        if  ((enleg == -1) or (exleg == -1)){
+                             cout << " \n ERROR\n" << endl;
+                             exit(1);
+                        }
                     }
-                    //Deterministic out the new vertex type by hacking SwitchLeg method
+                    //Determine the new vertex type by hacking SwitchLeg method
                     legvtx = SwitchLeg(enleg%4,VTX[p],-1);
                     if  ((legvtx.first-(exleg%4)) != 0)
                         legvtx = SwitchLeg(enleg%4,VTX[p],2);
@@ -403,6 +407,8 @@ long SSEXY::DeterministicOffDiagonalMove(){
                     //Flip the vertex type
                     VTX[p] = legvtx.second;
                 }
+              else{
+              }    
             }
             if  (DetDebug)
                 cout << endl;
@@ -520,6 +526,7 @@ float SSEXY::ALRTrick(){
     // _AnLoops has already been calculated:
     if  ((AnLoops != -2) and (not RandOffUpdate)) _AnLoops = AnLoops;
     else                                          _AnLoops = LoopPartition(Ared);
+    AnLoops = LoopPartition(Ared);
 
     long _EAnLoops = LoopPartition(Aext);
 //    cout << "Ratio: " << (1.0*EAnLoops)/(1.0*AnLoops) << endl;
@@ -950,12 +957,12 @@ int SSEXY::MCstep()
                 timer.stop("RandomUpdate"); 
     }
     else{
-                cout << "Before Deterministic Update" << endl; 
+        //        cout << "Before Deterministic Update" << endl; 
         timer.resume("DeterUpdate"); 
         long _AnLoops = DeterministicOffDiagonalMove();
         if  (AnLoops != -2) AnLoops = _AnLoops;
         timer.stop("DeterUpdate"); 
-                cout << "After Deterministic Update:" << _AnLoops << endl; 
+        //        cout << "After Deterministic Update:" << _AnLoops << endl; 
     }
     //----------------------------------------------------------------------        
     //  Map back the changes to the operator list
