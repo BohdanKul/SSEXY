@@ -161,7 +161,7 @@ def main():
         ax1.set_ylabel(r'$\mathrm{(S_2-S_2[\beta_{max}])/L}$')
         ax1.set_xlabel(r'$\mathrm{%s}[K^{-1}]$' %parMap['b'])
         #ax1.set_yscale('log')
-    if  args.energy:    
+    if  args.energy or args.partition:    
         ax2  = subplot(nplots,1,iplot)
         iplot -= 1
         ax2.set_xlabel(r'$\mathrm{%s[K^{-1}]}$' %parMap['b'])
@@ -227,7 +227,8 @@ def main():
             Beta2 = Beta
             
             Norm = int(Lx)**2 
-            E    = E[shift:]*Norm
+            E    = (E[shift:]-0.5*geom[1])*Norm
+            #E    = (E[shift:])*Norm
             dE   = dE[shift:]*Norm
             
             Z,BetaZ = GetZ(Beta,E,dE,offset)
@@ -236,6 +237,8 @@ def main():
                         if i==0: ax2.errorbar(Beta, E, dE, linestyle = 'None', color = colors[i], marker='o', label=r'$\mathrm{r=%0.2d;\, A=%s}$' %(geom[1],geom[0]))
                         else:    ax2.errorbar(Beta, E, dE, linestyle = 'None', color = colors[i], marker='o')
             if args.partition:
+                        Z = unumpy.nominal_values(Z);
+
                         if i==0: ax2.plot(BetaZ, Z, linestyle = '-', color = colors[i], label=r'$\mathrm{r=%0.2d;\, A=%s}$' %(geom[1],geom[0]))
                         else:    ax2.plot(BetaZ, Z, linestyle = '-', color = colors[i])
             
@@ -251,6 +254,7 @@ def main():
                     #FancyErrorbar(ax1,np.array(BetaZ),((S2-S2[-1])*1.0)/float(Lx),\
                     #      colors[i],((r'$\mathrm{Lx=%2.0d}$' %Lx) +'\n'+ (r'$\mathrm{S_{2%s}}$' %geom[0] )))
                     if  args.renyi:
+                        print S2[-1]
                         S2n = unumpy.nominal_values(((S2-S2[-1])*1.0)/float(Lx))
                         S2d = unumpy.std_devs(((S2-S2[-1])*1.0)/float(Lx))
                         ax1.errorbar(np.array(BetaZ),S2n,S2d,
