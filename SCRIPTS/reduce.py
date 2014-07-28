@@ -9,7 +9,7 @@ import numpy as np
 from matplotlib.ticker import MultipleLocator
 
 # ----------------------------------------------------------------------
-def getStats(data,SpanJobAverage=-1,dim=0):
+def getStats(data,SpanJobAverage=-1,waverage,dim=0):
     ''' Get the average and error of all columns in the data matrix. '''
 
     #SpanJobAverage tells whether the estimator file contains the Bins
@@ -19,6 +19,15 @@ def getStats(data,SpanJobAverage=-1,dim=0):
         if SpanJobAverage != -1:
            dataAve  = sum(data[:,:-1]*data[:,-1][:,newaxis],dim)/(1.0*sum(data[:,-1])) 
            dataErr = std(data[:,:-1],0)/sqrt(len(data[:,0])-1.0) 
+        elif waverage:
+            vals = data[0::2]
+            errs = data[1::2]
+            weights = 1.0/(errs*errs)
+            
+            # Little hack of the average function to compute the weighted std
+            # http://en.wikipedia.org/wiki/Weighted_arithmetic_mean#Dealing_with_variance
+            dataErr  = np.sqrt(1.0/numpy.average(1.0/weights, weights=weights))
+            dataAve  = np.average(vals,weights=weights,dim) 
         else:
             dataAve  = average(data,dim) 
             bins = MCstat.bin(data) 
@@ -35,9 +44,13 @@ def getScalarEst(type,ssexy,outName,reduceFlag, skip=0):
     fileNames = ssexy.getFileList(type)
     lAveraged = []
     oldFormat = False
+    small = 100
     for i, fname in enumerate(fileNames):
         headers   = ssexyhelp.getHeadersFromFile(fname)
-        
+        #if len(headers)<small: small = len(headers)
+        if '+/-' in headers:
+            headers = headers[::2]
+            print "Weigthed average merged files detected"
         if 'dnT' in headers:
             headers = headers[::2]
             oldFormat = True
@@ -45,22 +58,28 @@ def getScalarEst(type,ssexy,outName,reduceFlag, skip=0):
         if 'Bins' in headers: 
            SpanJobAverage = headers.index('Bins')
            headers.pop(SpanJobAverage) 
+           print "Normal average merged files detected"
         else: 
             SpanJobAverage = -1
         lAveraged += [SpanJobAverage]     
-    ave = zeros([len(fileNames),len(headers)],float)
-    err = zeros([len(fileNames),len(headers)],float)
+        small = min(small,len(headers))
+
+    ave = zeros([len(fileNames),small],float)
+    err = zeros([len(fileNames),small],float)
     for i,fname in enumerate(fileNames):
         # Compute the averages and error
-        data = loadtxt(fname,ndmin=2)[skip:,:]
+        waverage = False
         headers   = ssexyhelp.getHeadersFromFile(fname)
+        #if 'ZRatio' in headers:
+        #    headers.pop(3)
+        #    data = loadtxt(fname,ndmin=2,usecols=(0,1,2,4,5,6,7))[skip:,:]
+        #else:
+        data = loadtxt(fname,ndmin=2)[skip:,:]
         if 'dnT' in headers:
             headers = headers[::2]
-            oldFormat = True
-            print "Old estimator file format detected"
-        if 'Bins' in headers: 
-           SpanJobAverage = headers.index('Bins')
-           headers.pop(SpanJobAverage) 
+        if '+/-' in headers:
+            headers = headers[::2]
+            waverage = True
         #if 'ZRatio' in headers:
         #    headers = np.array(headers)
         #    headers = np.delete(headers,3,axis=0)
@@ -69,7 +88,7 @@ def getScalarEst(type,ssexy,outName,reduceFlag, skip=0):
             data = data[:,::2]
         print fname
         print headers
-        ave[i,:],err[i,:] = getStats(data,lAveraged[i])
+        ave[i,:],err[i,:] = getStats(data,lAveraged[i],waverage)
     
     # output the estimator data to disk
     outFile = open('reduce-%s%s.dat' % (type,outName),'w');
@@ -85,8 +104,11 @@ def getScalarEst(type,ssexy,outName,reduceFlag, skip=0):
     for i,fname in enumerate(fileNames):
         Vals.append(float(ssexy.params[ssexy.id[i]][reduceFlag]))
    
+    print Vals
     lorder = range(len(fileNames))
+    print lorder
     lorder = zip(*sorted(zip(Vals,lorder)))[1]  
+    print lorder
     
     
     # record into a file
