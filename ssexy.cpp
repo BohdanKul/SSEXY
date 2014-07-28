@@ -6,6 +6,7 @@
 #include "lattice.h"
 #include "lattice.cpp"
 #include "replica.cpp"
+#include "timer.cpp"
 //#include "communicator.h"
 //#include "communicator.cpp"
 #include "stdlib.h"
@@ -20,10 +21,18 @@ namespace po = boost::program_options;
 
 
 //**************************************************************************
+
+SSEXY::~SSEXY()
+{
+   
+};
+
 SSEXY:: SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, 
-              long seed, bool _measSS, int _Asize, string frName, 
+              long seed, bool _measSS, bool _measTime, bool _detVerbose, int _Asize, string frName, 
               LATTICE * _Anor, LATTICE* _Ared, LATTICE* _Aext): 
-communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
+communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize, _measTime), 
+RandomBase(seed),
+timer(_measTime)
 {
     long tmp[6][4] = {  {-1,-1,-1,-1},
                         { 1, 1, 1, 1},
@@ -36,12 +45,14 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
     //Store the simulation id
     SSEXID = communicator.getId();
 
+    measTime = _measTime;
     // Initialize replicas
     Nx = _Nx;
     Ny = _Ny;
     N  = Nx*Ny;
     dim = int(Nx>1) + int(Ny>1);
     if  (dim==0) dim = 1;
+
     r = _r;
 
     //Define temperature in one of two ways
@@ -65,6 +76,7 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
     Debug      = false;
     RandOffUpdate = true;
     SRTon      = true;
+
     ILRTon     = false;
     ALRTon     = false;
     Nloops     = 1;    
@@ -128,6 +140,11 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
             exit(0);
         }
         
+        // Check whether region Anor is equal to Ared.
+        // Usefull during a deterministic loopds update
+        if  (*Aregion == Ared) AnLoops = -1;
+        else                   AnLoops = -2;
+
         cout << "A" << endl;
         for (auto spin=Aregion->begin(); spin!=Aregion->end(); spin++){
             cout << *spin << ' ';
@@ -155,6 +172,7 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
 
    //Write headers for a new estimator file
     string eHeader;
+    string tHeader;
     if (frName==""){
         eHeader = boost::str(boost::format("#%15s%16s%16s")%"nT"%"ET"%"Legs");
         if (measSS)    eHeader += boost::str(boost::format("%16s")%"SS");
@@ -173,12 +191,17 @@ communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize), RandomBase(seed)
         *communicator.stream("estimator") << eHeader;    
 
 
-        if  (r>1)
+        if  (r>1){
             for (int j=0; j!=r; j++){
                 eHeader = boost::str(boost::format("%15s%i%15s%i") %"n"%(j+1)%"E"%(j+1));
                 *communicator.stream("estimator") << eHeader;    
             }
+        }
         *communicator.stream("estimator") << endl;    
+    
+        //if  (measTime){
+        //    eHeader = boost::str(boost::format("#%15s%16s%16s")%"Total"%"RandomUpdate"%"LinksConstruct"%"DeterUpdate"%);
+        //}
     }
 } 
         
@@ -357,19 +380,27 @@ long SSEXY::DeterministicOffDiagonalMove(){
         
     for (auto iLoop=1; iLoop!=(nLoops+1); iLoop++){
         if  (uRand() < 0.5){ 
-            if  (DetDebug)
-                cout << "Loop: " << iLoop << endl;
+            if  (DetDebug){
+               cout << "Flipping loop: " << iLoop << " Out of: " << nLoops << endl; //<< " Size: "<< DeterPaths[iLoop].size() << endl;
+            }
             long i = 0;
+            exleg = -1;
             for (auto leg=DeterPaths[iLoop].begin(); leg!=DeterPaths[iLoop].end(); ++leg){
-                //cout << "i: " << ++i << endl;
                 if (*leg!=exleg){
                     enleg = *leg;
-                    exleg = *(++leg);
-                    p     = (long) (*leg)/4;
-                    if  (DetDebug)
-                        cout << enleg << " " << exleg << " " ;
                     
-                    //Deterministic out the new vertex type by hacking SwitchLeg method
+                    //exleg = *(++leg);
+                    exleg = *(next(leg));
+                    
+                    p     = (long) (*leg)/4;
+                    if  (DetDebug){
+                        cout << enleg << " " << exleg << " " ;
+                        if  ((enleg == -1) or (exleg == -1)){
+                             cout << " \n ERROR\n" << endl;
+                             exit(1);
+                        }
+                    }
+                    //Determine the new vertex type by hacking SwitchLeg method
                     legvtx = SwitchLeg(enleg%4,VTX[p],-1);
                     if  ((legvtx.first-(exleg%4)) != 0)
                         legvtx = SwitchLeg(enleg%4,VTX[p],2);
@@ -377,11 +408,14 @@ long SSEXY::DeterministicOffDiagonalMove(){
                     //Flip the vertex type
                     VTX[p] = legvtx.second;
                 }
+              else{
+              }    
             }
             if  (DetDebug)
                 cout << endl;
         }
     }
+    return nLoops;
 }
 
 
@@ -487,14 +521,17 @@ long SSEXY::RandomOffDiagonalUpdate(){
 double SSEXY::ALRTrick(){
     //Measure the number of loops formed in each
     //modified geometry.
-    //When we call MeasureNLoop for the 2nd time,
-    //all necessary structures are already computed.
-    //That is why we need a special boolean flag in 
-    //order to reduce the computational effort.
-    long AnLoops  = LoopPartition(Ared);
-    long EAnLoops = LoopPartition(Aext);
+    long _AnLoops  = -2;
+
+    // If deterministic loops update is on and Anorm = Ared
+    // _AnLoops has already been calculated:
+    if  ((AnLoops != -2) and (not RandOffUpdate)) _AnLoops = AnLoops;
+    else                                          _AnLoops = LoopPartition(Ared);
+    AnLoops = LoopPartition(Ared);
+
+    long _EAnLoops = LoopPartition(Aext);
 //    cout << "Ratio: " << (1.0*EAnLoops)/(1.0*AnLoops) << endl;
-    return pow(2,EAnLoops-AnLoops);
+    return pow(2,_EAnLoops-_AnLoops);
 }
 
 
@@ -648,6 +685,7 @@ vector<long>* SSEXY::SwitchAregion()
 
 int SSEXY::Measure()
 {
+    timer.stop("Total");
     //Accumulate the new measurement
     nMeas += 1;
     for (int j=0; j!=r; j++)
@@ -671,6 +709,9 @@ int SSEXY::Measure()
         }
         if  (ILRTon)
             LRatio += ILRTrick();
+
+        // If deterministic loops update is on and Ared = Anorm
+        // the calculation has already been performed during an off-update
         if  (ALRTon)
             ALRatio +=ALRTrick(); 
     }
@@ -715,6 +756,9 @@ int SSEXY::Measure()
             }
         }
 
+        if  (measTime){
+            
+        }
        //Record energy of each replica
         if  (r>1)         
         
@@ -744,7 +788,9 @@ int SSEXY::Measure()
         cout << SSEXID << ": Measurement taken" << endl;
         }
     }
-
+    
+    timer.StopAll();
+    timer.StartAll();
     return 0;
 }
 
@@ -861,9 +907,16 @@ int SSEXY::MCstep()
     for (int j=0; j!=r; j++){
         if  (Replicas[j]->DiagonalMove()==1)
             Replicas[j]->AdjustM();
+       
+        timer.resume("LinksConstruct");
         Replicas[j]->ConstructLinks();
-        if  ((measRatio and (ILRTon or ALRTon)) or not(RandOffUpdate))
+        timer.stop("LinksConstruct");
+        
+        if  ((measRatio and (ILRTon or ALRTon)) or not(RandOffUpdate)){
+            timer.resume("DetPathTracing"); 
             Replicas[j]->GetDeterministicLinks();
+            timer.stop("DetPathTracing"); 
+        }
         firsts[j] = Replicas[j]->getFirst();        
         lasts[j]  = Replicas[j]->getLast();        
         links[j]  = Replicas[j]->getLink();        
@@ -906,9 +959,19 @@ int SSEXY::MCstep()
     LINK = MergeVectors(links);
     VTX  = MergeVectors(vtxs);
 
-    if  (RandOffUpdate) RandomOffDiagonalUpdate();
-    else                DeterministicOffDiagonalMove();
-
+    if  (RandOffUpdate){
+                timer.resume("RandomUpdate"); 
+        RandomOffDiagonalUpdate();
+                timer.stop("RandomUpdate"); 
+    }
+    else{
+        //        cout << "Before Deterministic Update" << endl; 
+        timer.resume("DeterUpdate"); 
+        long _AnLoops = DeterministicOffDiagonalMove();
+        if  (AnLoops != -2) AnLoops = _AnLoops;
+        timer.stop("DeterUpdate"); 
+        //        cout << "After Deterministic Update:" << _AnLoops << endl; 
+    }
     //----------------------------------------------------------------------        
     //  Map back the changes to the operator list
     //----------------------------------------------------------------------        
@@ -1121,6 +1184,8 @@ int main(int argc, char *argv[])
     po::variables_map params;
     simulationOptions.add_options()
             ("help,h", "produce help message")
+            ("timer",      "Turn on timer")
+            ("detverbose", "Provide a rich output on deterministic loops")
             ("state,s",      po::value<string>()->default_value(""),"path to the state file")
             ("process_id,p", po::value<int>()->default_value(0),"process id")
             ("replica,r",    po::value<int>()->default_value(1),"number of replicas")
@@ -1205,7 +1270,9 @@ int main(int argc, char *argv[])
     SSEXY ssexy(params["replica"].as<int>(), params["width"].as<int>(),
                 params["height"].as<int>(),  params["temperature"].as<double>(), 
                 params["beta"].as<double>(), params["process_id"].as<int>(), 
-                params.count("super"),       Anor.getSize(),  
+                params.count("super"),       params.count("timer"),
+                params.count("detverbose"),
+                Anor.getSize(),  
                 params["state"].as<string>(), 
                 &Anor, &Ared, &Aext);  
 
