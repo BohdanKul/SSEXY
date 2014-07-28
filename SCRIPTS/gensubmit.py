@@ -19,10 +19,10 @@ def main():
     # setup the command line parser options 
     parser = ArgumentParser(description="Build submission scripts for various clusters") 
     parser.add_argument("file", help='configuration file')
+    parser.add_argument('-b','--batch', type=int, help='Turn on batch mode. Sets the number of RG seeds.')
     parser.add_argument("cluster", metavar="cluster", choices=['clumeq','westgrid','sharcnet','scinet','bluemoon'],\
             help="target cluster: [westgrid,sharcnet,scinet,clumeq,bluemoon]") 
     parser.add_argument("-r",type=str, dest='run', default="",help="optional JobId number that will be added to the scripts name")
-
     # parse the command line options
     args = parser.parse_args() 
     inFileName = args.file
@@ -93,12 +93,21 @@ def main():
                 
     commandLines = []
     print optionValue
+    index = 0
     for i in range(0,num):
-        commandLines.append('./ssexy.e ')
+        commandLine = './ssexy.e '
         for flag,val in optionValue.iteritems():
-            commandLines[i] += '-%s %s ' % (flag,val[i])
-        commandLines[i] += staticPIMCOps
+            commandLine += '-%s %s ' % (flag,val[i])
+        commandLine += staticPIMCOps
+        commandLines.append(commandLine)
 
+    ncommandLines = []
+    if  args.batch!=None:
+        for j in range(args.batch):
+            for commandLine in commandLines:
+                ncommandLines.append(commandLine + ' -p %d ' %j)
+        commandLines=ncommandLines
+    
     if args.cluster == 'westgrid':
         clusters.westgrid(commandLines,args.run)
 
