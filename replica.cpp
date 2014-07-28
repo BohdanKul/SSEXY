@@ -389,44 +389,38 @@ void Replica::GetDeterministicLinks(){
     //spin index on the upper edge is shifted by the number of spins.
     map<long,int> LegToSpin;
 
-    //List of unmarked edge legs
-    list<long> leLegs;
+    //Edge or not edge leg status vector 
+    vector<bool> isELeg(4*n,false);
 
     //Fill the map and the list
     int spin = 0;
-//    cout << endl << "Before partitionning-------------------------------" << endl;
+    if (DetDebug)
+        cout << endl << "Before partitionning-------------------------------" << endl;
     for (auto leg=first.begin(); leg!=first.end(); leg++){
-//        cout << setw(4) << *leg;
+        if (DetDebug) cout << setw(4) << *leg;
         if  (*leg!=-1){
             LegToSpin[*leg] = spin;
-            leLegs.push_back(*leg);
+            isELeg[*leg] = true;
         }
         spin += 1;
     }
-    //cout << endl;
+    if (DetDebug) cout << endl;
+    
+
     //Continue the filling with the 2nd edge legs
     for (auto leg=last.begin(); leg!=last.end(); leg++){
-//        cout << setw(4) << *leg;
+        if (DetDebug)  cout << setw(4) << *leg;
         if  (*leg!=-1){
             LegToSpin[*leg] = spin;
-            leLegs.push_back(*leg);
+            isELeg[*leg] = true;
         }
         spin += 1;
     }
-//    cout << endl;
+    if (DetDebug) cout << endl;
 
-    //spin = 0;
-    //for (auto link=links.begin(); link!=links.end(); link++){
-    //    cout <<setw(4) << spin<<": "<< setw(4) << *link << " ";
-    //    if (spin%5==0) cout << endl;
-    //    spin +=1;
-    //}
-    //cout << endl << "Links size: " << links.size() <<endl;
-    
-    //Complimentary to the leLegs list, this list contains 
-    //already marked legs
-    list<long> lmLegs;
-    
+   
+    // Marked or unmarked leg status vector
+    vector<bool> isMLeg(4*n,false); 
     
     long p;          //Operator index
     long leg;        //Leg index
@@ -460,16 +454,13 @@ void Replica::GetDeterministicLinks(){
     
         //Otherwise, follow links until we hit an edge leg
         else{
+            if (DetDebug) cout << endl << "spin: "<<setw(4)<<ispin<<" leg: "<<setw(4) << leg << endl;
             //If the leg hasnt been assigned to a loop yet
-//            cout << endl << "spin: "<<setw(4)<<ispin<<" leg: "<<setw(4) << leg << endl;
-            if  (find(lmLegs.begin(),lmLegs.end(),leg)==lmLegs.end()){
-                //Remove it from the list of unmarked legs
-                //Add it to the list of marked legs.
-                leLegs.remove(leg); 
-                lmLegs.push_back(leg);
- 
+            if (isMLeg[leg] == false){
+                // Set its status as marked
+                isMLeg[leg] = true;
                 
-                //Construct a new loop 
+                // Construct a new loop 
                 nLoop += 1; 
                 if  (DetDebug) cout << "Loop: " << nLoop << endl;
                 path.clear();
@@ -479,25 +470,24 @@ void Replica::GetDeterministicLinks(){
                 //since the last move must also be a vertex move 
                 p = (long) leg/4;   //index of the corresponding operator
                 leg = p*4 + SwitchLegDeter(leg%4,vtx[p],p);  
-//              cout << "V switch: " << setw(4) << leg;
+                if (DetDebug) cout << "V switch: " << setw(4) << leg;
 
-                while (find(leLegs.begin(),leLegs.end(),leg)==leLegs.end()) {
+                while (isELeg[leg] == false){
                    //Move to the leg it is connected to
                    path.push_back(leg);
                    leg = links[leg];
                    path.push_back(leg);
                    p   = (long) leg/4; 
-//                   cout << " L switch: " << setw(4) << leg << endl;
+                   if (DetDebug) cout << " L switch: " << setw(4) << leg << endl;
 
                     //Switch to another leg on the same vertex
                     p = (long) leg/4;   //index of the corresponding operator
                     leg = p*4 + SwitchLegDeter(leg%4,vtx[p],p);  
-//                    cout << "V switch: " << setw(4) << leg;
-                
+                    if (DetDebug) cout << "V switch: " << setw(4) << leg;
+               
                 //Stop if  we have reached a leg at an edge
                 }  
-                leLegs.remove(leg); 
-                lmLegs.push_back(leg); 
+                isMLeg[leg] = true;
                 path.push_back(leg);
             
                 //Store loop's head and tail spins.
