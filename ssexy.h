@@ -7,6 +7,7 @@
 #include <set>
 #include <map>
 #include <list>
+#include "timer.h"
 using namespace std;
 
 
@@ -21,6 +22,8 @@ class SSEXY: public RandomBase{
         long maxLoopSize;
         bool measSS;
         bool measRatio;
+        bool measTime;
+        bool detVerbose;
 
         //Physical parameters
         int r; // order of Renyi entropy
@@ -54,6 +57,7 @@ class SSEXY: public RandomBase{
         vector<long> Aext;
         vector<long> Ared;
         vector<long> Adif;
+        long         AnLoops;
         vector<long> shifts;
         vector<long> ns;
         vector<long> Tns;
@@ -78,6 +82,7 @@ class SSEXY: public RandomBase{
 
         //File management
         Communicator communicator;
+        Timer        timer;
         long SSEXID;
 
         long Bounce(long enLeg);
@@ -96,7 +101,8 @@ class SSEXY: public RandomBase{
         //long  GetConnectedSubraph(map<long,set<long>>& graph, set<long>& path,long cpos);
 
     public:
-       SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, bool _measSS, int _Asize, string rfName, LATTICE* _Anor, LATTICE* _Ared, LATTICE* _Aext); 
+       SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _Beta, long seed, bool _measSS, bool _measTime, bool _detVerbose, int _Asize, string rfName, LATTICE* _Anor, LATTICE* _Ared, LATTICE* _Aext); 
+       ~SSEXY();
        int   AdjustParameters();
        int   MCstep(); 
        int   Measure(); 
