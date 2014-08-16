@@ -75,7 +75,7 @@ timer(_measTime)
     
     Debug      = false;
     RandOffUpdate = true;
-    SRTon      = true;
+    SRTon      = false;
 
     ILRTon     = false;
     ALRTon     = false;
@@ -527,11 +527,12 @@ double SSEXY::ALRTrick(){
     // _AnLoops has already been calculated:
     if  ((AnLoops != -2) and (not RandOffUpdate)) _AnLoops = AnLoops;
     else                                          _AnLoops = LoopPartition(Ared);
-    AnLoops = LoopPartition(Ared);
+    //AnLoops = LoopPartition(Ared);
 
     long _EAnLoops = LoopPartition(Aext);
-//    cout << "Ratio: " << (1.0*EAnLoops)/(1.0*AnLoops) << endl;
+    
     return pow(2,_EAnLoops-_AnLoops);
+    //return 1.0/(1.0+pow(2,_AnLoops-_EAnLoops));
 }
 
 

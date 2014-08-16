@@ -23,6 +23,9 @@ Communicator::Communicator(int _Nx, int _Ny, int _r, float _T, float _Beta, long
         dataName += boost::str(boost::format("-%04d") %_Asize);
     }
 
+    //Add the seed value to the filename
+    dataName +=boost::str(boost::format("-p%05d") %p);
+
     types  = vector<string> {"state","estimator"};
     outDir = "OUTPUT"; 
     
