@@ -74,11 +74,11 @@ timer(_measTime)
     if (frName!="") LoadState();
     
     Debug      = false;
-    RandOffUpdate = true;
+    RandOffUpdate = false;
     SRTon      = false;
 
     ILRTon     = false;
-    ALRTon     = false;
+    ALRTon     = true;
     Nloops     = 1;    
     nMeas      = 0;
     if  (SRTon) binSize = 100;
@@ -869,7 +869,7 @@ int SSEXY::LoadState(){
         }
         Replicas[j]->setn(N);
         Replicas[j]->setM(Replicas[j]->getOper()->size());
-        ////cout << "n = " << N << " M = " << Replicas[j]->getOper()->size() << endl;
+        //cout << "n = " << N << " M = " << Replicas[j]->getOper()->size() << endl;
         //cout << "Operators line: " << sBuf << endl;
         //cout << "Operators:" << endl;
         //for (auto oper=Replicas[j]->getOper()->begin(); oper!=Replicas[j]->getOper()->end(); oper++)
@@ -888,6 +888,9 @@ int SSEXY::LoadState(){
         }
         //cout << "Spins line: " << sBuf << endl;
         //cout << "Spins:" << endl;
+        //for (auto spin=Replicas[j]->getSpin()->begin(); spin!=Replicas[j]->getSpin()->end(); spin++)
+        //    cout << *spin << " ";
+        //cout << endl;
     }
 }        
 
@@ -1279,13 +1282,19 @@ int main(int argc, char *argv[])
 
     cout << endl << "Equilibration stage" << endl << endl;
     
-    int NoAdjust;
-    NoAdjust=0;
-    for (int i=0; i!=100; i++){
-        if  (ssexy.AdjustParameters() == 0) NoAdjust += 1;
-        else NoAdjust = 0;
-        
-        if (NoAdjust == 10) break;
+    // Run pre-equilibration only if starting from scratch
+    if  (params["state"].as<string>() == ""){
+        int NoAdjust;
+        NoAdjust=0;
+        for (int i=0; i!=100; i++){
+            if  (ssexy.AdjustParameters() == 0) NoAdjust += 1;
+            else NoAdjust = 0;
+            
+            if (NoAdjust == 10) break;
+        }
+    }
+    else{ 
+        cout << "No pre-equilibration. Loading from: " << params["state"].as<string>() << endl;
     }
         
     cout << endl << "Measurement stage" << endl << endl;
