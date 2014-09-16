@@ -784,10 +784,10 @@ int SSEXY::Measure()
         if  (nSaved == saveFreq){
             SaveState();
             nSaved = 0;
-        
+        } 
         //Notify about a new measurement taken
         cout << SSEXID << ": Measurement taken" << endl;
-        }
+        
     }
     
     //timer.StopAll();
