@@ -6,7 +6,7 @@
 #include "lattice.h"
 #include "lattice.cpp"
 #include "replica.cpp"
-#include "timer.cpp"
+//#include "timer.cpp"
 //#include "communicator.h"
 //#include "communicator.cpp"
 #include "stdlib.h"
@@ -32,7 +32,7 @@ SSEXY:: SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _B
               LATTICE * _Anor, LATTICE* _Ared, LATTICE* _Aext): 
 communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize, _measTime), 
 RandomBase(seed),
-timer(_measTime)
+//timer(_measTime)
 {
     long tmp[6][4] = {  {-1,-1,-1,-1},
                         { 1, 1, 1, 1},
@@ -85,7 +85,7 @@ timer(_measTime)
     else           binSize = 100;
     saveFreq      = 1; 
     nSaved        = 0;
-    maxLoopSize   = 2400000;
+    maxLoopSize   = 5000000;
     SpinStiffness = 0;
     nAred         = 0;
     nAext         = 0;
@@ -686,7 +686,7 @@ vector<long>* SSEXY::SwitchAregion()
 
 int SSEXY::Measure()
 {
-    timer.stop("Total");
+    //timer.stop("Total");
     //Accumulate the new measurement
     nMeas += 1;
     for (int j=0; j!=r; j++)
@@ -790,8 +790,8 @@ int SSEXY::Measure()
         }
     }
     
-    timer.StopAll();
-    timer.StartAll();
+    //timer.StopAll();
+    //timer.StartAll();
     return 0;
 }
 
@@ -912,14 +912,14 @@ int SSEXY::MCstep()
         if  (Replicas[j]->DiagonalMove()==1)
             Replicas[j]->AdjustM();
        
-        timer.resume("LinksConstruct");
+        //timer.resume("LinksConstruct");
         Replicas[j]->ConstructLinks();
-        timer.stop("LinksConstruct");
+        //timer.stop("LinksConstruct");
         
         if  ((measRatio and (ILRTon or ALRTon)) or not(RandOffUpdate)){
-            timer.resume("DetPathTracing"); 
+            //timer.resume("DetPathTracing"); 
             Replicas[j]->GetDeterministicLinks();
-            timer.stop("DetPathTracing"); 
+            //timer.stop("DetPathTracing"); 
         }
         firsts[j] = Replicas[j]->getFirst();        
         lasts[j]  = Replicas[j]->getLast();        
@@ -964,16 +964,16 @@ int SSEXY::MCstep()
     VTX  = MergeVectors(vtxs);
 
     if  (RandOffUpdate){
-                timer.resume("RandomUpdate"); 
+                //timer.resume("RandomUpdate"); 
         RandomOffDiagonalUpdate();
-                timer.stop("RandomUpdate"); 
+                //timer.stop("RandomUpdate"); 
     }
     else{
         //        cout << "Before Deterministic Update" << endl; 
-        timer.resume("DeterUpdate"); 
+        //timer.resume("DeterUpdate"); 
         long _AnLoops = DeterministicOffDiagonalMove();
         if  (AnLoops != -2) AnLoops = _AnLoops;
-        timer.stop("DeterUpdate"); 
+        //timer.stop("DeterUpdate"); 
         //        cout << "After Deterministic Update:" << _AnLoops << endl; 
     }
     //----------------------------------------------------------------------        
