@@ -31,7 +31,7 @@ SSEXY:: SSEXY(int _r, unsigned short _Nx, unsigned short _Ny, float _T, float _B
               long seed, bool _measSS, bool _measTime, bool _detVerbose, int _Asize, string frName, 
               LATTICE * _Anor, LATTICE* _Ared, LATTICE* _Aext): 
 communicator(_Nx,_Ny,_r,_T,_Beta,seed,frName,_Asize, _measTime), 
-RandomBase(seed),
+RandomBase(seed)
 //timer(_measTime)
 {
     long tmp[6][4] = {  {-1,-1,-1,-1},

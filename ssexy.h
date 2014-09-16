@@ -82,7 +82,7 @@ class SSEXY: public RandomBase{
 
         //File management
         Communicator communicator;
-        Timer        timer;
+        //Timer        timer;
         long SSEXID;
 
         long Bounce(long enLeg);
