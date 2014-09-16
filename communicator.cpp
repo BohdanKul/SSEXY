@@ -34,7 +34,7 @@ Communicator::Communicator(int _Nx, int _Ny, int _r, float _T, float _Beta, long
         GenerateId();
     else{
         string fileName = string(find( rfName.rbegin(), rfName.rend(), '/').base(), rfName.end());
-        id = atol(fileName.substr(25,9).c_str());
+        id = atol(fileName.substr(fileName.length()-13,9).c_str());
         }
 
     string  fileName;
@@ -42,7 +42,7 @@ Communicator::Communicator(int _Nx, int _Ny, int _r, float _T, float _Beta, long
         fileName = boost::str(boost::format("%s/%s-%s-%09d.dat") %outDir %*type %dataName %id);
         //State files are read-only at first
         if ((rfName!="") and (*type=="state")){
-            cout << fileName;    
+            cout << fileName << endl;    
             mFStreams[*type] = new fstream(fileName,ios_base::in);
         }
         //Other files are write by appending
