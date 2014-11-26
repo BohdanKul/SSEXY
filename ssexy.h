@@ -58,6 +58,7 @@ class SSEXY: public RandomBase{
         vector<long> Ared;
         vector<long> Adif;
         long         AnLoops;
+        long         EnLoops;
         vector<long> shifts;
         vector<long> ns;
         vector<long> Tns;
@@ -98,6 +99,8 @@ class SSEXY: public RandomBase{
         long  LoopPartition(vector<long>& BC);
         long  DeterministicOffDiagonalMove();
         long  RandomOffDiagonalUpdate();
+        long  HardSwitchAregion();
+        long  FlipLoop(vector<long>& BC, vector<long>& visited, long ispin, int ireplica){; 
         //long  GetConnectedSubraph(map<long,set<long>>& graph, set<long>& path,long cpos);
 
     public:
