@@ -521,17 +521,17 @@ long SSEXY::RandomOffDiagonalUpdate(){
 double SSEXY::ALRTrick(){
     //Measure the number of loops formed in each
     //modified geometry.
-    long _AnLoops  = -2;
-    long _EAnLoops = -2;
+    long _AnLoops = -2;
+    long _EnLoops = -2;
     // If deterministic loops update is on and Anorm = Ared
     // _AnLoops has already been calculated:
     if  ((AnLoops != -2) and (not RandOffUpdate)) _AnLoops = AnLoops;
     else                                          _AnLoops = LoopPartition(Ared);
     //AnLoops = LoopPartition(Ared);
 
-    _EAnLoops = EAnLoops;
-    return pow(2,_EAnLoops-_AnLoops);
-    //return 1.0/(1.0+pow(2,_AnLoops-_EAnLoops));
+    _EnLoops = EnLoops;
+    return pow(2,_EnLoops-_AnLoops);
+    //return 1.0/(1.0+pow(2,_AnLoops-_EnLoops));
 }
 
 
@@ -636,19 +636,24 @@ float SSEXY::ILRTrick(){
 * Flip deterministic segments that form a closed loop with respect to BCs.
 * The end result is that the final configuration is compatible with BCs 
 ***************************************************************************/
-long SSEXY::FlipLoop(vector<long>& BC, vector<long>& visited, long ispin, int ireplica){
+long SSEXY::FlipLoop(vector<long>& BC, list<long>& visited, long ispin, int ireplica){
 
+    bool fDebug = true;
+    if  (fDebug){ cout << "Flip loop" << endl};
+    
     //Boundary spins connections
     Partitions.clear(); 
     Partitions.push_back(*(Replicas[0]->getPart()));
     Partitions.push_back(*(Replicas[1]->getPart()));
    
     int  i;
-    int  spin    = ispin;          // Current spin 
-    int  nspin   = ispin;          // Next spin
+    int  spin    = ispin;          // Current spin index
+    int  nspin   = ispin;          // Next spin index
     int  replica = ireplica;       // Current replica
     bool connected;                // Type of a local BC  
-
+    int   spinState;               // Current spin state 
+    int  nspinState;               // Next spin state 
+    
     //Randomly decide whether to flip the first spin
     int flip = pow(-1,uRandInt()%2);
     
@@ -658,29 +663,31 @@ long SSEXY::FlipLoop(vector<long>& BC, vector<long>& visited, long ispin, int ir
         nspinState = flip*Replicas[replica]->getSpin()->at(nspin); 
 
         //Keep track of visited spins on the first replica 
-        if  (replica==0): visited.append(nspin);
+        if  (replica==0){ visited.push_back(nspin);}
 
         //Determine the spin's state
-        if  (nspin<N): nspinState = Replicas[replica]->getSpin()->at(nspin);
-        else:          nspinState = Replicas[replica]->getTedge()->at(nspin);
+        if  (nspin<N){ nspinState = Replicas[replica]->getSpin()->at(nspin);}
+        else{          nspinState = Replicas[replica]->getTedge()->at(nspin);}
         
         //Switch to the spin connected by BC
         connected = not(find(BC.begin(),BC.end(),nspin%N)==BC.end());
         spin      = BCnextSpin(nspin, replica, connected);       
         
         //Keep track of visited spins on the first replica 
-        if  (replica==0): visited.append(nspin);
+        if  (replica==0){ visited.push_back(nspin);}
 
         //Determine the spin's state
-        if  (spin<N): spinState = Replicas[replica]->getSpin()->at(spin);
-        else:         spinState = Replicas[replica]->getTedge()->at(spin);
+        if  (spin<N){ spinState = Replicas[replica]->getSpin()->at(spin);}
+        else{         spinState = Replicas[replica]->getTedge()->at(spin);}
         
         //Flip the segment if spins connected by BCs are not compatible
         if  (spinState != nspinState){
+            
+            if  (fDebug){ cout << "Flipping a segment"<< endl};
             flip = -1;
             
             //Deterministic segment to be flipped
-            list<long>* dsegment = Replicas[replica]->getLoopPaths()->at(spin);
+            list<long>* dsegment = &Replicas[replica]->getLoopPaths()->at(spin);
             
             //Vertex-specifying variables
             long enleg = -1;        //vertex entrance leg
@@ -721,7 +728,7 @@ long SSEXY::FlipLoop(vector<long>& BC, vector<long>& visited, long ispin, int ir
 * Switch configuration's BCs between Aext and Ared by updating the list
 * of vertices in replicas' objects. Spin state array remains intact.  
 ***************************************************************************/
-int SSEXY::HardSwitchAregion()
+long SSEXY::HardSwitchAregion()
 {
     int  S0;
     int  S1;
@@ -733,14 +740,14 @@ int SSEXY::HardSwitchAregion()
             //If the initial spin configuration isnt compatible with Aext BCs
             if  (S0!=S1){
                 //Check if it hasnt been fixed by a previous segment flip
-                if  (find(visited.begin(),visited.end(),sindex)==visited.end()){
-                    FlipLoop(Aext,visited,sindex,0);
+                if  (find(visited.begin(),visited.end(),*sindex)==visited.end()){
+                    FlipLoop(Aext,visited,*sindex,0);
                 }
                 //The same check for the other boundary
-                if  (find(visited.begin(),visited.end(),sindex+N)==visited.end()){
+                if  (find(visited.begin(),visited.end(),*sindex+N)==visited.end()){
                     // +N is used to distinguish between the
                     // upper and lower replica's boundaries
-                    FlipLoop(Aext,visited,sindex+N,0);
+                    FlipLoop(Aext,visited,*sindex+N,0);
                 }
             }
         }
@@ -752,14 +759,14 @@ int SSEXY::HardSwitchAregion()
             //If the initial spin configuration isnt compatible with Ared BCs
             if  (S0!=S1){
                 //Check if it hasnt been fixed by a previous segment flip
-                if  (find(visited.begin(),visited.end(),sindex)==visited.end()){
-                    FlipLoop(Ared,visited,sindex,0);
+                if  (find(visited.begin(),visited.end(),*sindex)==visited.end()){
+                    FlipLoop(Ared,visited,*sindex,0);
                 }
                 //The same check for the other boundary
-                if  (find(visited.begin(),visited.end(),sindex+N)==visited.end()){
+                if  (find(visited.begin(),visited.end(),*sindex+N)==visited.end()){
                     // +N is used to distinguish between the
                     // upper and lower replica's boundaries
-                    FlipLoop(Ared,visited,sindex+N,0);
+                    FlipLoop(Ared,visited,*sindex+N,0);
                 }
             }
         } 
@@ -1070,34 +1077,23 @@ int SSEXY::MCstep()
         //Aregion = SwitchAregion();
         SwitchAregion();
     }
-    
    
-    //----------------------------------------------------------------------        
-    // Shift the values of the leg coordinates by the 
-    // total number of legs in previous replicas
-    //----------------------------------------------------------------------        
-    for (int j=1; j!=r; j++){
-        for (auto link=links[j]->begin(); link!=links[j]->end(); link++){
-            if  (*link != -1){
-                *link += shifts[j]*4;
-            }
-        }
-        for (int k=0; k!=firsts[0]->size(); k++){
-            if  (firsts[j]->at(k) != -1){
-                 firsts[j]->at(k) += shifts[j]*4;
-            }
-            if  (lasts[j]->at(k) != -1){
-                lasts[j]->at(k)   += shifts[j]*4;
-            }
-        }
-    }
-    
-   // Merge structures necessary for the loop construction
-    LINK = MergeVectors(links);
+    // Merge VTX necessary for the loop construction
     VTX  = MergeVectors(vtxs);
 
     if  (RandOffUpdate){
                 //timer.resume("RandomUpdate"); 
+        // Shift the values of the leg coordinates by the 
+        // total number of legs in previous replicas
+        for (int j=1; j!=r; j++){
+            for (auto link=links[j]->begin(); link!=links[j]->end(); link++){
+                if  (*link != -1){
+                    *link += shifts[j]*4;
+                }
+            }
+        }
+        // Merge LINK structure necessary for the loop construction
+        LINK = MergeVectors(links);
         RandomOffDiagonalUpdate();
                 //timer.stop("RandomUpdate"); 
     }
@@ -1117,13 +1113,28 @@ int SSEXY::MCstep()
                 Replicas[j]->GetDeterministicLinks();
             } 
             // Compute the loops number
-            EAnLoops = LoopPartition(Aext);
+            EnLoops = LoopPartition(Aext);
     
         //timer.stop("DeterUpdate"); 
         //        cout << "After Deterministic Update:" << _AnLoops << endl; 
         }
     }
+
+    //---------------------------------------------------------------------- 
+    // Shift the values of the leg coordinates by the 
+    // total number of legs in previous replicas
     //----------------------------------------------------------------------        
+    for (int j=1; j!=r; j++){
+        for (int k=0; k!=firsts[0]->size(); k++){
+            if  (firsts[j]->at(k) != -1){
+                 firsts[j]->at(k) += shifts[j]*4;
+            }
+            if  (lasts[j]->at(k) != -1){
+                lasts[j]->at(k)   += shifts[j]*4;
+            }
+        }
+    }
+    //----------------------------------------------------------------------   
     //  Map back the changes to the operator list
     //----------------------------------------------------------------------        
     long leg;

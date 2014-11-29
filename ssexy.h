@@ -100,7 +100,7 @@ class SSEXY: public RandomBase{
         long  DeterministicOffDiagonalMove();
         long  RandomOffDiagonalUpdate();
         long  HardSwitchAregion();
-        long  FlipLoop(vector<long>& BC, vector<long>& visited, long ispin, int ireplica){; 
+        long  FlipLoop(vector<long>& BC, list<long>& visited, long ispin, int ireplica); 
         //long  GetConnectedSubraph(map<long,set<long>>& graph, set<long>& path,long cpos);
 
     public:
